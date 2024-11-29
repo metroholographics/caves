@@ -1,0 +1,8 @@
+TO_DO
+
+* Initialise SDL and set-up 640 480 black window
+* Make  game 60 fps
+* Make and load tilesheet
+* Draw character onto screen (add player location to struct) + 320x240 game resolution
+- Draw moving sprites (moving right?)
+- Sprite animations 
