@@ -12,13 +12,13 @@
 
 
 typedef struct {
-	char *name;
-	SDL_Window* window;
-	SDL_Renderer* renderer;
-	SDL_Texture* spritesheet;
-	bool running;
-	int width;
-	int height;
+	char         *name;
+	SDL_Window   *window;
+	SDL_Renderer *renderer;
+	SDL_Texture  *spritesheet;
+	bool         running;
+	int          width;
+	int          height;
 } Game;
 
 typedef struct {
@@ -35,16 +35,16 @@ typedef enum {
 } Moves;
 
 typedef struct {
-	Moves moves;
-	SDL_FRect sprite;
+	Moves      moves;
+	SDL_FRect  sprite;
 	SDL_FPoint pos;
-	Animation anim;
-	float acceleration_x;
-	float max_acceleration_x;
-	float max_speed_x;
-	float velocity_x;
-	float slowdown_x;
-	bool move_buffer[NUM_MOVES];
+	Animation  anim;
+	float      acceleration_x;
+	float      max_acceleration_x;
+	float      max_speed_x;
+	float      velocity_x;
+	float      slowdown_x;
+	bool       move_buffer[NUM_MOVES];
 } Player;
 
 
@@ -62,8 +62,8 @@ void			read_player_input(Player *p, SDL_Event e, SDL_EventType t);
 void			start_moving_left(Player *p);
 void			start_moving_right(Player *p);
 void			stop_moving(Player *p);
-void			update_player_pos(Player *p, int e_t);
-void			update_animation(Player *p, int e_t);
+void			update_player_pos(Player *p, uint64_t e_t);
+void			update_animation(Player *p, uint64_t e_t);
 void			free_player_struct(Player *p);
 
 
