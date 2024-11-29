@@ -21,12 +21,13 @@ main(int argc, char *argv[])
     game->running = true;
 
     if (!SDL_CreateWindowAndRenderer(
-            game->name, 
-            game->width, 
-            game->height, 
-            0, 
-            &game->window,
-            &game->renderer)
+                game->name, 
+                game->width, 
+                game->height, 
+                0, 
+                &game->window,
+                &game->renderer
+            )
         ) {
             printf("Window and Renderer couldn't init: %s\n", SDL_GetError());
             game->running = false;
@@ -59,17 +60,32 @@ main(int argc, char *argv[])
                 case SDL_EVENT_KEY_DOWN:
                     if (event.key.key == SDLK_ESCAPE) {
                         game->running = false;
+                    } else {
+                        read_player_input(player, event, SDL_EVENT_KEY_DOWN);
                     }
+                    break;
+                case SDL_EVENT_KEY_UP:
+                    read_player_input(player, event, SDL_EVENT_KEY_UP);
                     break;
                 default:
                     break;
             }
         }
-
         uint64_t current_time_ms = SDL_GetTicks();
-        update_animation(player, current_time_ms - last_update_ms);
+        uint64_t elapsed_time_ms = current_time_ms - last_update_ms;
+
+        handle_player_input(player);
+        update_player_pos(player, elapsed_time_ms);
+        update_animation(player, elapsed_time_ms);
         last_update_ms = current_time_ms;
-        SDL_FRect dest = (SDL_FRect) {.x = player->pos.x, .y = player->pos.y, .w = 16.0, .h = 16.0};
+
+        SDL_FRect dest = (SDL_FRect) {
+            .x = round(player->pos.x),
+            .y = round(player->pos.y),
+            .w = 16.0,
+            .h = 16.0
+        };
+
         SDL_RenderTexture(game->renderer, game->spritesheet, &player->sprite, &dest);
 
         SDL_RenderPresent(game->renderer);
@@ -139,14 +155,98 @@ load_player_struct(void)
     p->pos.x = G_WIDTH / 2;
     p->pos.y = G_HEIGHT / 2;
     p->anim = (Animation) {
-        .frame_time = 15, 
+        .frame_time = 8, 
         .num_frames = 3,
         .curr_frame = 0,
         .elapsed_time = 0,
     };
+    p->acceleration_x = 0.0f;
+    p->max_acceleration_x = 0.0006f;
+    p->max_speed_x = 0.1f;
+    p->velocity_x = 0.0f;
+    p->slowdown_x = 0.6f;
+    for (int i = 0; i < NUM_MOVES; i++) {
+        p->move_buffer[i] = false;
+    }
 
     return p;
 }
+
+void
+handle_player_input(Player *p)
+{
+    if (p->move_buffer[LEFT] && p->move_buffer[RIGHT]) {
+        stop_moving(p);
+    } else if (p->move_buffer[LEFT]) {
+        start_moving_left(p);
+    } else if (p->move_buffer[RIGHT]) {
+        start_moving_right(p);
+    } else {
+        stop_moving(p);
+    }
+    return;
+}
+
+void
+read_player_input(Player *p, SDL_Event e, SDL_EventType t)
+{
+    if (t == SDL_EVENT_KEY_UP) {
+        switch (e.key.key) {
+            case SDLK_LEFT:
+                p->move_buffer[LEFT] = false;
+                break;
+            case SDLK_RIGHT:
+                p->move_buffer[RIGHT] = false;
+                break;
+        }
+    } else if (t == SDL_EVENT_KEY_DOWN) {
+        switch (e.key.key) {
+            case SDLK_LEFT:
+                p->move_buffer[LEFT] = true;
+                break;
+            case SDLK_RIGHT:
+                p->move_buffer[RIGHT] = true;
+                break;
+        }
+    }
+    //printf("MoveBuffer[L=%d][R=%d]\n", p->move_buffer[LEFT], p->move_buffer[RIGHT]);
+}
+
+
+void
+start_moving_left(Player *p)
+{
+    p->acceleration_x = -1 * p->max_acceleration_x;
+}
+
+void
+start_moving_right(Player *p)
+{
+    p->acceleration_x = fabsf(p->max_acceleration_x);
+}
+
+void
+stop_moving(Player *p)
+{
+    p->acceleration_x = 0;
+
+}
+
+void
+update_player_pos(Player *p, int e_t)
+{
+    p->pos.x += p->velocity_x * e_t;
+    p->velocity_x += p->acceleration_x * e_t;
+    if (p->acceleration_x < 0.0f) {
+        p->velocity_x = fmaxf(p->velocity_x, (-1 * p->max_speed_x));
+    } else if (p->acceleration_x > 0.0f) {
+        p->velocity_x = fminf(p->velocity_x, p->max_speed_x);
+    } else {
+        p->velocity_x *= p->slowdown_x;
+    }
+    //printf("Vel: %f, Acc: %f\n", p->velocity_x, p->acceleration_x);
+}
+
 
 void
 update_animation(Player* p, int e_t)
@@ -171,9 +271,9 @@ force_fps(uint8_t fps, uint64_t start_ms)
         if (elapsed_ms < 1000 / fps) {
             SDL_Delay(1000 / fps - elapsed_ms);
         }
-    /*float spf = (SDL_GetTicks() - start_ms) / 1000.0;
-    float f = 1 / spf;
-    printf("FPS: %f\n", f);*/
+    // float spf = (SDL_GetTicks() - start_ms) / 1000.0;
+    // float f = 1 / spf;
+    // printf("FPS: %f\n", f);
 }
 
 void

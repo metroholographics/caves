@@ -4,5 +4,8 @@ TO_DO
 * Make  game 60 fps
 * Make and load tilesheet
 * Draw character onto screen (add player location to struct) + 320x240 game resolution
-- Draw moving sprites (moving right?)
-- Sprite animations 
+* Draw moving sprites (moving left?)
+* Sprite animations 
+* Think about how to handle player movement (read SDL keyboard docs)
+* Add player left and right walking movement with acceleration
+- move player physics values to a physics struct
