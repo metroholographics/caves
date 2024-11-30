@@ -9,27 +9,30 @@
 int
 main(int argc, char *argv[])
 {
-    (void)argc; (void)argv;
+    (void)argc;(void)argv;
+
+    Game *game;
+    Player *player;
+    uint64_t last_update_ms;
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         printf("SDL couldn't init: %s\n", SDL_GetError());
         return 1;
     }
 
-    Game* game    = init_game_struct("caves", W_WIDTH, W_HEIGHT);
+    game          = init_game_struct("caves", W_WIDTH, W_HEIGHT);
     game->running = true;
 
-    if (!SDL_CreateWindowAndRenderer(
-                game->name, 
-                game->width, 
-                game->height, 
-                0, 
-                &game->window,
-                &game->renderer
-            )
-        ) {
-            printf("Window and Renderer couldn't init: %s\n", SDL_GetError());
-            game->running = false;
+    if (!SDL_CreateWindowAndRenderer(game->name,
+            game->width, 
+            game->height, 
+            0, 
+            &game->window,
+            &game->renderer
+        )
+    ) {
+        printf("Window and Renderer couldn't init: %s\n", SDL_GetError());
+        game->running = false;
     }
     set_game_resolution(game, G_WIDTH, G_HEIGHT, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
 
@@ -41,15 +44,18 @@ main(int argc, char *argv[])
 
     SDL_SetTextureScaleMode(game->spritesheet, SDL_SCALEMODE_NEAREST);
 
-    Player *player = load_player_struct();
+    player = load_player_struct();
 
-    uint64_t last_update_ms = SDL_GetTicks();
+    last_update_ms = SDL_GetTicks();
 
     while (game->running) {
-        uint64_t start_ms = SDL_GetTicks();
+        uint64_t start_ms = SDL_GetTicks(),
+                 current_time_ms,
+                 elapsed_time_ms;
         SDL_Event event;
-
-        SDL_SetRenderDrawColor(game->renderer, 0, 0, 0, 255);
+        SDL_FRect dest;
+        
+        SDL_SetRenderDrawColor(game->renderer, 5, 5, 5, 255);
         SDL_RenderClear(game->renderer);
 
         while (SDL_PollEvent(&event)) {
@@ -72,23 +78,27 @@ main(int argc, char *argv[])
             }
         }
 
-        uint64_t current_time_ms = SDL_GetTicks();
-        uint64_t elapsed_time_ms = current_time_ms - last_update_ms;
+        current_time_ms = SDL_GetTicks();
+        elapsed_time_ms = current_time_ms - last_update_ms;
 
         handle_player_input(player);
+        tick_animation(player, elapsed_time_ms);
         update_player_pos(player, elapsed_time_ms);
-        update_animation(player, elapsed_time_ms);
 
         last_update_ms = current_time_ms;
 
-        SDL_FRect dest = (SDL_FRect) {
-            .x = player->pos.x,
-            .y = player->pos.y,
+        dest = (SDL_FRect) {
+            .x = round(player->pos.x),
+            .y = round(player->pos.y),
             .w = 16.0,
             .h = 16.0
         };
 
-        SDL_RenderTexture(game->renderer, game->spritesheet, &player->sprite, &dest);
+        SDL_RenderTexture(game->renderer,
+            game->spritesheet,
+            &player->curr_sprite->source,
+            &dest
+        );
 
         SDL_RenderPresent(game->renderer);
 
@@ -105,7 +115,7 @@ main(int argc, char *argv[])
 Game*
 init_game_struct(char* name, int w, int h)
 {
-    Game* g;
+    Game *g;
 
     g = malloc(sizeof(Game));
     if (g == NULL) return NULL;
@@ -122,7 +132,7 @@ init_game_struct(char* name, int w, int h)
 }
 
 void
-set_game_resolution(Game* g, int r_w, int r_h, SDL_RendererLogicalPresentation lp)
+set_game_resolution(Game *g, int r_w, int r_h, SDL_RendererLogicalPresentation lp)
 {
     SDL_SetRenderLogicalPresentation(
         g->renderer,
@@ -133,7 +143,7 @@ set_game_resolution(Game* g, int r_w, int r_h, SDL_RendererLogicalPresentation l
 }
 
 SDL_Texture*
-load_spritesheet_png(Game *g, char* filepath)
+load_spritesheet_png(Game *g, char *filepath)
 {
     SDL_Texture *s;
 
@@ -146,30 +156,26 @@ load_spritesheet_png(Game *g, char* filepath)
 Player*
 load_player_struct(void)
 {
-    Player* p; 
+    int i;
+    Player *p; 
 
     p = malloc(sizeof(Player));
     if (p == NULL) return NULL;
 
-    p->sprite.x = 0;
-    p->sprite.y = 0;
-    p->sprite.w = TILE_SIZE;
-    p->sprite.h = TILE_SIZE;
-    p->pos.x    = G_WIDTH / 2;
-    p->pos.y    = G_HEIGHT / 2;
-    p->anim     = (Animation) {
-                    .frame_time = 8, 
-                    .num_frames = 3,
-                    .curr_frame = 0,
-                    .elapsed_time = 0,
-                };
-    p->acceleration_x       = 0.0f;
-    p->max_acceleration_x   = 0.0003;
-    p->max_speed_x          = 0.08f;
-    p->velocity_x           = 0.0f;
-    p->slowdown_x           = 0.8f;
+    load_player_sprites(p);
+    p->state       = FACING_LEFT;
+    p->curr_sprite = &p->sprites[IDLE_LEFT];
+    p->pos.x       = G_WIDTH  / 2;
+    p->pos.y       = G_HEIGHT / 2;
+    p->physics     = (Physics) {
+                .acc_x       = 0.0f,
+                .max_acc_x   = 0.0003,
+                .max_speed_x = 0.09f,
+                .vel_x       = 0.0f,
+                .slowdown_x  = 0.8f,
+            };
 
-    for (int i = 0; i < NUM_MOVES; i++) {
+    for (i = 0; i < NUM_MOVES; i++) {
         p->move_buffer[i] = false;
     }
 
@@ -177,19 +183,33 @@ load_player_struct(void)
 }
 
 void
-handle_player_input(Player *p)
+load_player_sprites(Player *p)
 {
-    if (p->move_buffer[LEFT] && p->move_buffer[RIGHT]) {
-        stop_moving(p);
-    } else if (p->move_buffer[LEFT]) {
-        start_moving_left(p);
-    } else if (p->move_buffer[RIGHT]) {
-        start_moving_right(p);
-    } else {
-        stop_moving(p);
-    }
-
-    return;
+    p->sprites[IDLE_LEFT]  = (Sprite) {
+                            .id     = IDLE_LEFT,
+                            .source = (SDL_FRect) {.x = 16, .y = 0, .w = 16, .h = 16},
+                            .anim   = (Animation) {
+                            .num_frames   = 1,
+                            .frame_time   = 10,
+                            .curr_frame   = 0,
+                            .elapsed_time = 0
+                            }
+                        };
+    p->sprites[WALK_LEFT]  = (Sprite) {
+                            .id     = WALK_LEFT,
+                            .source = (SDL_FRect) {16, 0 , 16, 16},
+                            .anim   = (Animation) {3 , 10, 0 , 0 }
+                        };
+    p->sprites[IDLE_RIGHT] = (Sprite) {
+                            .id     = IDLE_RIGHT,
+                            .source = (SDL_FRect) {64, 0 , 16, 16},
+                            .anim   = (Animation) {1 , 10, 0 , 0 }
+                        };
+    p->sprites[WALK_RIGHT] = (Sprite) {
+                            .id     = WALK_RIGHT,
+                            .source = (SDL_FRect) {64, 0 , 16, 16},
+                            .anim   = (Animation) {3 , 10, 0 , 0 }
+                        };
 }
 
 void
@@ -217,68 +237,97 @@ read_player_input(Player *p, SDL_Event e, SDL_EventType t)
     //printf("MoveBuffer[L=%d][R=%d]\n", p->move_buffer[LEFT], p->move_buffer[RIGHT]);
 }
 
+void
+handle_player_input(Player *p)
+{
+    if (p->move_buffer[LEFT] && p->move_buffer[RIGHT]) {
+        stop_moving(p);
+    } else if (p->move_buffer[LEFT]) {
+        start_moving_left(p);
+    } else if (p->move_buffer[RIGHT]) {
+        start_moving_right(p);
+    } else {
+        stop_moving(p);
+    }
+
+    return;
+}
 
 void
 start_moving_left(Player *p)
 {
-    p->acceleration_x = -1 * p->max_acceleration_x;
+    p->state         = FACING_LEFT;
+    p->curr_sprite   = &p->sprites[WALK_LEFT];
+    p->physics.acc_x = -1 * p->physics.max_acc_x;
 }
 
 void
 start_moving_right(Player *p)
 {
-    p->acceleration_x = p->max_acceleration_x;
+    p->state         = FACING_RIGHT;
+    p->curr_sprite   = &p->sprites[WALK_RIGHT];
+    p->physics.acc_x = p->physics.max_acc_x;
 }
 
 void
 stop_moving(Player *p)
 {
-    p->acceleration_x = 0;
-    
+    reset_animation(p);
+    if (p->state == FACING_LEFT) {
+        p->curr_sprite = &p->sprites[IDLE_LEFT];
+    } else if (p->state == FACING_RIGHT) {
+        p->curr_sprite = &p->sprites[IDLE_RIGHT];
+    }
+    p->physics.acc_x = 0;
+}
 
+void
+reset_animation(Player *p)
+{
+    p->curr_sprite->anim.elapsed_time = 0;
 }
 
 void
 update_player_pos(Player *p, uint64_t e_t)
 {
-    p->pos.x      += p->velocity_x * e_t;
-    p->velocity_x += p->acceleration_x * e_t;
+    p->pos.x         += p->physics.vel_x * e_t;
+    p->physics.vel_x += p->physics.acc_x * e_t;
 
-    if (p->acceleration_x < 0.0f && p->move_buffer[LEFT]) {
-        p->velocity_x = fmaxf(p->velocity_x, (-1 * p->max_speed_x));
-    } else if (p->acceleration_x > 0.0f && p->move_buffer[RIGHT]) {
-        p->velocity_x = fminf(p->velocity_x, p->max_speed_x);
+    if (p->physics.acc_x < 0.0f) {
+        p->physics.vel_x = fmaxf(p->physics.vel_x, (-1 * p->physics.max_speed_x));
+    } else if (p->physics.acc_x > 0.0f) {
+        p->physics.vel_x = fminf(p->physics.vel_x, p->physics.max_speed_x);
     } else {
-        p->velocity_x *= p->slowdown_x;
+        p->physics.vel_x *= p->physics.slowdown_x;
     }
-
-    //printf("Vel: %f, Acc: %f\n", p->velocity_x, p->acceleration_x);
-    //printf("Pos_x %f\n", p->pos.x);
+    //printf("Vel: %f, Acc: %f\n", p->physics.vel_x, p->physics.acc_x);
 }
 
 
 void
-update_animation(Player* p, uint64_t e_t)
+tick_animation(Player *p, uint64_t e_t)
 {
-    p->anim.elapsed_time += e_t;
+    p->curr_sprite->anim.elapsed_time += e_t;
 
-    if (p->anim.elapsed_time > 1000 / p->anim.frame_time) {
-        p->anim.curr_frame++;
-        p->anim.elapsed_time = 0;
+    if (p->curr_sprite->anim.elapsed_time > 1000 / p->curr_sprite->anim.frame_time) {
+        p->curr_sprite->anim.curr_frame++;
+        p->curr_sprite->anim.elapsed_time = 0;
 
-        if (p->anim.curr_frame < p->anim.num_frames) {
-            p->sprite.x += TILE_SIZE;
+        if (p->curr_sprite->anim.curr_frame < p->curr_sprite->anim.num_frames) {
+            p->curr_sprite->source.x += TILE_SIZE;
         } else {
-            p->sprite.x -= TILE_SIZE * (p->anim.num_frames - 1);
-            p->anim.curr_frame = 0;
+            p->curr_sprite->source.x -= TILE_SIZE * (p->curr_sprite->anim.num_frames - 1);
+            p->curr_sprite->anim.curr_frame = 0;
         }
     }
+
 }
 
 void
 force_fps(uint8_t fps, uint64_t start_ms)
 {
     uint64_t elapsed_ms = SDL_GetTicks() - start_ms;
+
         if (elapsed_ms < 1000 / fps) {
             SDL_Delay(1000 / fps - elapsed_ms);
         }

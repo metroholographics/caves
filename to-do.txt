@@ -8,5 +8,6 @@ TO_DO
 * Sprite animations 
 * Think about how to handle player movement (read SDL keyboard docs)
 * Add player left and right walking movement with acceleration
-- Create easy access buffer to select player sprites
-- move player physics values to a physics struct
+* Move player physics values to a physics struct
+* Create easy access buffer to select player sprites
+* Add sprite switching based on direction
