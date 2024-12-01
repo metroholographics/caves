@@ -11,7 +11,7 @@ main(int argc, char *argv[])
 {
     (void)argc;(void)argv;
 
-    Game *game;
+    Game   *game;
     Player *player;
     uint64_t last_update_ms;
 
@@ -102,7 +102,7 @@ main(int argc, char *argv[])
 
         SDL_RenderPresent(game->renderer);
 
-        force_fps(60, start_ms);
+        force_fps(50, start_ms);
     }
 
     free_player_struct(player);
@@ -163,16 +163,23 @@ load_player_struct(void)
     if (p == NULL) return NULL;
 
     load_player_sprites(p);
-    p->state       = FACING_LEFT;
+    p->dir       = FACING_LEFT;
     p->curr_sprite = &p->sprites[IDLE_LEFT];
     p->pos.x       = G_WIDTH  / 2;
     p->pos.y       = G_HEIGHT / 2;
     p->physics     = (Physics) {
                 .acc_x       = 0.0f,
-                .max_acc_x   = 0.0003,
-                .max_speed_x = 0.09f,
+                .max_acc_x   = 0.000625,
+                .max_speed_x = 0.1625f,
                 .vel_x       = 0.0f,
-                .slowdown_x  = 0.8f,
+                .slowdown_x  = 0.4f,
+                .vel_y       = 0.0f,
+                .max_speed_y = 0.1625f,
+                .jump_speed  = 0.1625f,
+                .jump_time   = 0,
+                .max_jump    = 275,
+                .jump_active = false,
+                .gravity     = 0.000625f,
             };
 
     for (i = 0; i < NUM_MOVES; i++) {
@@ -223,6 +230,9 @@ read_player_input(Player *p, SDL_Event e, SDL_EventType t)
             case SDLK_RIGHT:
                 p->move_buffer[RIGHT] = false;
                 break;
+            case SDLK_Z:
+                p->move_buffer[JUMP] = false;
+                break;
         }
     } else if (t == SDL_EVENT_KEY_DOWN) {
         switch (e.key.key) {
@@ -231,6 +241,9 @@ read_player_input(Player *p, SDL_Event e, SDL_EventType t)
                 break;
             case SDLK_RIGHT:
                 p->move_buffer[RIGHT] = true;
+                break;
+            case SDLK_Z:
+                p->move_buffer[JUMP] = true;
                 break;
         }
     }
@@ -250,13 +263,19 @@ handle_player_input(Player *p)
         stop_moving(p);
     }
 
+    if (p->move_buffer[JUMP]) {
+        start_jump(p);
+    } else if (!p->move_buffer[JUMP]) {
+        stop_jump(p);
+    }
+
     return;
 }
 
 void
 start_moving_left(Player *p)
 {
-    p->state         = FACING_LEFT;
+    p->dir         = FACING_LEFT;
     p->curr_sprite   = &p->sprites[WALK_LEFT];
     p->physics.acc_x = -1 * p->physics.max_acc_x;
 }
@@ -264,7 +283,7 @@ start_moving_left(Player *p)
 void
 start_moving_right(Player *p)
 {
-    p->state         = FACING_RIGHT;
+    p->dir           = FACING_RIGHT;
     p->curr_sprite   = &p->sprites[WALK_RIGHT];
     p->physics.acc_x = p->physics.max_acc_x;
 }
@@ -273,9 +292,9 @@ void
 stop_moving(Player *p)
 {
     reset_animation(p);
-    if (p->state == FACING_LEFT) {
+    if (p->dir == FACING_LEFT) {
         p->curr_sprite = &p->sprites[IDLE_LEFT];
-    } else if (p->state == FACING_RIGHT) {
+    } else if (p->dir == FACING_RIGHT) {
         p->curr_sprite = &p->sprites[IDLE_RIGHT];
     }
     p->physics.acc_x = 0;
@@ -288,6 +307,48 @@ reset_animation(Player *p)
 }
 
 void
+start_jump(Player *p)
+{
+    if (on_ground(p)) {
+        reset_jump(p);
+        p->physics.vel_y = (-1 * p->physics.jump_speed);
+    } else if (p->physics.vel_y < 0.0f) {
+        reactivate_jump(p);
+    } else {
+        stop_jump(p);
+    }
+}
+
+bool
+on_ground(Player *p)
+{
+    return (p->pos.y == G_HEIGHT / 2);
+}
+
+void
+reset_jump(Player *p)
+{
+    p->physics.jump_time = p->physics.max_jump;
+    reactivate_jump(p);
+}
+
+void
+reactivate_jump(Player *p)
+{
+    if (p->physics.jump_time > 0) {
+        p->physics.jump_active = true;
+    } else {
+        p->physics.jump_active = false;
+    }
+}
+
+void
+stop_jump(Player *p)
+{
+    p->physics.jump_active = false;
+}
+
+void
 update_player_pos(Player *p, uint64_t e_t)
 {
     p->pos.x         += p->physics.vel_x * e_t;
@@ -297,12 +358,37 @@ update_player_pos(Player *p, uint64_t e_t)
         p->physics.vel_x = fmaxf(p->physics.vel_x, (-1 * p->physics.max_speed_x));
     } else if (p->physics.acc_x > 0.0f) {
         p->physics.vel_x = fminf(p->physics.vel_x, p->physics.max_speed_x);
-    } else {
+    } else if (on_ground(p)){
         p->physics.vel_x *= p->physics.slowdown_x;
     }
-    //printf("Vel: %f, Acc: %f\n", p->physics.vel_x, p->physics.acc_x);
+
+    update_jump(p, e_t);
+
+    p->pos.y += p->physics.vel_y * e_t;
+
+    if (!p->physics.jump_active) {
+        p->physics.vel_y = fminf(p->physics.vel_y + p->physics.gravity * e_t,
+                            p->physics.max_speed_y);
+    }
+
+    if (p->pos.y > G_HEIGHT / 2) {
+        p->pos.y = G_HEIGHT / 2;
+        p->physics.vel_y = 0;
+    }
+
+    //printf("Vel: %f, Acc: %d\n", p->physics.vel_y, p->physics.jump_time);
 }
 
+void
+update_jump(Player *p, uint64_t e_t)
+{
+    if (p->physics.jump_active) {
+        p->physics.jump_time -= e_t;
+        if (p->physics.jump_time <= 0) {
+            p->physics.jump_active = false;
+        }
+    }
+}
 
 void
 tick_animation(Player *p, uint64_t e_t)

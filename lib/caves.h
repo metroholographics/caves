@@ -33,11 +33,19 @@ typedef struct {
 	float max_speed_x;
 	float vel_x;
 	float slowdown_x;
+	float vel_y;
+	float max_speed_y;
+	float jump_speed;
+	int   jump_time;
+	int   max_jump;
+	bool  jump_active;
+	float gravity;
 } Physics;
 
 typedef enum {
 	LEFT = 0,
 	RIGHT,
+	JUMP,
 	NUM_MOVES
 } Moves;
 
@@ -58,10 +66,10 @@ typedef struct {
 typedef enum {
 	FACING_LEFT,
 	FACING_RIGHT,
-} P_State;
+} P_Dir;
 
 typedef struct {
-	P_State    state;
+	P_Dir      dir;
 	bool       move_buffer[NUM_MOVES];
 	Sprite     sprites[NUM_SPRITES];
 	Sprite*    curr_sprite;
@@ -85,7 +93,13 @@ void			start_moving_left(Player *p);
 void			start_moving_right(Player *p);
 void			stop_moving(Player *p);
 void			reset_animation(Player *p);
+void			start_jump(Player *p);
+bool			on_ground(Player *p);
+void			reset_jump(Player *p);
+void			reactivate_jump(Player *p);
+void			stop_jump(Player *p);
 void			update_player_pos(Player *p, uint64_t e_t);
+void			update_jump(Player *p, uint64_t e_t);
 void			tick_animation(Player *p, uint64_t e_t);
 void			free_player_struct(Player *p);
 

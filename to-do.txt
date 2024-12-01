@@ -11,3 +11,5 @@ TO_DO
 * Move player physics values to a physics struct
 * Create easy access buffer to select player sprites
 * Add sprite switching based on direction
+* Add jump mechanics
+- Add jumping sprites and switching
