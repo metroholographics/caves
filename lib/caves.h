@@ -43,33 +43,72 @@ typedef struct {
 } Physics;
 
 typedef enum {
-	LEFT = 0,
-	RIGHT,
+	M_LEFT = 0,
+	M_RIGHT,
 	JUMP,
+	LOOK_UP,
+	LOOK_DOWN,
 	NUM_MOVES
 } Moves;
 
 typedef enum {
-	IDLE_LEFT = 0,
-	WALK_LEFT,
-	IDLE_RIGHT,
-	WALK_RIGHT,
+	L_IDLE_H=0,
+	L_IDLE_U,
+	L_IDLE_D,
+	L_WALK_H,
+	L_WALK_U,
+	L_WALK_D,
+	L_JUMP_H,
+	L_JUMP_U,
+	L_JUMP_D,
+	L_FALL_H,
+	L_FALL_U,
+	L_FALL_D,
+	R_IDLE_H,
+	R_IDLE_U,
+	R_IDLE_D,
+	R_WALK_H,
+	R_WALK_U,
+	R_WALK_D,
+	R_JUMP_H,
+	R_JUMP_U,
+	R_JUMP_D,
+	R_FALL_H,
+	R_FALL_U,
+	R_FALL_D,
 	NUM_SPRITES
 } SpriteID;
 
 typedef struct {
-	SpriteID  id;
 	SDL_FRect source;
 	Animation anim;
 } Sprite;
 
 typedef enum {
-	FACING_LEFT,
-	FACING_RIGHT,
+	IDLE=0,
+	WALKING,
+	JUMPING,
+	FALLING,
+	NUM_STATES
+} P_State;
+
+typedef enum {
+	LEFT=0,
+	RIGHT,
+	NUM_DIRS
 } P_Dir;
 
+typedef enum {
+	HORIZONTAL=0,
+	UP,
+	DOWN,
+	NUM_LOOKS
+} P_Look;
+
 typedef struct {
+	P_State    state;
 	P_Dir      dir;
+	P_Look     looking;
 	bool       move_buffer[NUM_MOVES];
 	Sprite     sprites[NUM_SPRITES];
 	Sprite*    curr_sprite;
@@ -86,12 +125,18 @@ void			force_fps(uint8_t fps, uint64_t start_ms);
 
 /*player functions*/
 Player*			load_player_struct(void);
-void			load_player_sprites(Player *p);
+void			init_player_sprites(Player *p);
+Sprite			load_player_sprite(int dir, int state, int looking);
 void			read_player_input(Player *p, SDL_Event e, SDL_EventType t);
 void			handle_player_input(Player *p);
+void			set_state(Player *p);
+void			change_sprite(Player *p);
 void			start_moving_left(Player *p);
 void			start_moving_right(Player *p);
 void			stop_moving(Player *p);
+void			look_up(Player *p);
+void			look_down(Player *p);
+void			look_horizontal(Player *p);
 void			reset_animation(Player *p);
 void			start_jump(Player *p);
 bool			on_ground(Player *p);

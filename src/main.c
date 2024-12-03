@@ -82,8 +82,10 @@ main(int argc, char *argv[])
         elapsed_time_ms = current_time_ms - last_update_ms;
 
         handle_player_input(player);
-        tick_animation(player, elapsed_time_ms);
         update_player_pos(player, elapsed_time_ms);
+        set_state(player);
+        change_sprite(player);
+        tick_animation(player, elapsed_time_ms);
 
         last_update_ms = current_time_ms;
 
@@ -162,9 +164,12 @@ load_player_struct(void)
     p = malloc(sizeof(Player));
     if (p == NULL) return NULL;
 
-    load_player_sprites(p);
-    p->dir       = FACING_LEFT;
-    p->curr_sprite = &p->sprites[IDLE_LEFT];
+    init_player_sprites(p);
+
+    p->state     = IDLE;
+    p->dir       = LEFT;
+    p->looking   = HORIZONTAL;
+    p->curr_sprite = &p->sprites[L_IDLE_H];
     p->pos.x       = G_WIDTH  / 2;
     p->pos.y       = G_HEIGHT / 2;
     p->physics     = (Physics) {
@@ -172,7 +177,7 @@ load_player_struct(void)
                 .max_acc_x   = 0.000625,
                 .max_speed_x = 0.1625f,
                 .vel_x       = 0.0f,
-                .slowdown_x  = 0.4f,
+                .slowdown_x  = 0.8f,
                 .vel_y       = 0.0f,
                 .max_speed_y = 0.1625f,
                 .jump_speed  = 0.1625f,
@@ -190,33 +195,63 @@ load_player_struct(void)
 }
 
 void
-load_player_sprites(Player *p)
+init_player_sprites(Player *p)
 {
-    p->sprites[IDLE_LEFT]  = (Sprite) {
-                            .id     = IDLE_LEFT,
-                            .source = (SDL_FRect) {.x = 16, .y = 0, .w = 16, .h = 16},
-                            .anim   = (Animation) {
-                            .num_frames   = 1,
-                            .frame_time   = 10,
-                            .curr_frame   = 0,
-                            .elapsed_time = 0
-                            }
-                        };
-    p->sprites[WALK_LEFT]  = (Sprite) {
-                            .id     = WALK_LEFT,
-                            .source = (SDL_FRect) {16, 0 , 16, 16},
-                            .anim   = (Animation) {3 , 10, 0 , 0 }
-                        };
-    p->sprites[IDLE_RIGHT] = (Sprite) {
-                            .id     = IDLE_RIGHT,
-                            .source = (SDL_FRect) {64, 0 , 16, 16},
-                            .anim   = (Animation) {1 , 10, 0 , 0 }
-                        };
-    p->sprites[WALK_RIGHT] = (Sprite) {
-                            .id     = WALK_RIGHT,
-                            .source = (SDL_FRect) {64, 0 , 16, 16},
-                            .anim   = (Animation) {3 , 10, 0 , 0 }
-                        };
+    int s_idx = 0;
+    for (int i = 0; i < NUM_DIRS; i++) {
+        for (int j = 0; j < NUM_STATES; j++) {
+            for (int k = 0; k < NUM_LOOKS; k++) {
+                p->sprites[s_idx] = load_player_sprite(i, j, k);
+                s_idx++;
+            }
+        }
+    }
+}
+
+Sprite
+load_player_sprite(int dir, int state, int looking)
+{
+    int base_x = 0, base_y = 0, y_factor = 1;
+    int fps = 10, num_walking_frames = 3;
+    int look_offset = 3, jump_offset = 2, fall_offset = 1;
+    int back_frame = 7, down_fall = 6;
+
+
+    Sprite s = (Sprite) {
+        .source = (SDL_FRect) {.x = base_x, .y = base_y, .w = TILE_SIZE, .h = TILE_SIZE},
+        .anim   = (Animation) {1, fps, 0, 0},
+    };
+
+    s.source.y = (dir == LEFT) ? 0 : y_factor * TILE_SIZE;
+
+    switch (state) {
+        case IDLE:
+            s.source.x += (looking * look_offset) * TILE_SIZE;
+            break;
+        case WALKING:
+            s.source.x += (looking * look_offset) * TILE_SIZE;
+            s.anim.num_frames = num_walking_frames;
+            break;
+        case JUMPING:
+            s.source.x += (looking * look_offset + jump_offset) * TILE_SIZE;
+            break;
+        case FALLING:
+            s.source.x += (looking * look_offset + fall_offset) * TILE_SIZE;   
+    }
+
+    if (looking == DOWN) {
+        if (state == WALKING) {
+            s.source.x = base_x;
+        } else if (state == IDLE) {
+            s.source.x = back_frame * TILE_SIZE;
+        } else if (state == FALLING) {
+            s.source.x = down_fall * TILE_SIZE;
+        }
+
+    }
+
+    return s;
+
 }
 
 void
@@ -225,25 +260,37 @@ read_player_input(Player *p, SDL_Event e, SDL_EventType t)
     if (t == SDL_EVENT_KEY_UP) {
         switch (e.key.key) {
             case SDLK_LEFT:
-                p->move_buffer[LEFT]  = false;
+                p->move_buffer[M_LEFT]  = false;
                 break;
             case SDLK_RIGHT:
-                p->move_buffer[RIGHT] = false;
+                p->move_buffer[M_RIGHT] = false;
                 break;
             case SDLK_Z:
                 p->move_buffer[JUMP] = false;
+                break;
+            case SDLK_UP:
+                p->move_buffer[LOOK_UP] = false;
+                break;
+            case SDLK_DOWN:
+                p->move_buffer[LOOK_DOWN] = false;
                 break;
         }
     } else if (t == SDL_EVENT_KEY_DOWN) {
         switch (e.key.key) {
             case SDLK_LEFT:
-                p->move_buffer[LEFT]  = true;
+                p->move_buffer[M_LEFT]  = true;
                 break;
             case SDLK_RIGHT:
-                p->move_buffer[RIGHT] = true;
+                p->move_buffer[M_RIGHT] = true;
                 break;
             case SDLK_Z:
                 p->move_buffer[JUMP] = true;
+                break;
+            case SDLK_UP:
+                p->move_buffer[LOOK_UP] = true;
+                break;
+            case SDLK_DOWN:
+                p->move_buffer[LOOK_DOWN] = true;
                 break;
         }
     }
@@ -253,14 +300,24 @@ read_player_input(Player *p, SDL_Event e, SDL_EventType t)
 void
 handle_player_input(Player *p)
 {
-    if (p->move_buffer[LEFT] && p->move_buffer[RIGHT]) {
+    if (p->move_buffer[M_LEFT] && p->move_buffer[M_RIGHT]) {
         stop_moving(p);
-    } else if (p->move_buffer[LEFT]) {
+    } else if (p->move_buffer[M_LEFT]) {
         start_moving_left(p);
-    } else if (p->move_buffer[RIGHT]) {
+    } else if (p->move_buffer[M_RIGHT]) {
         start_moving_right(p);
     } else {
         stop_moving(p);
+    }
+
+    if (p->move_buffer[LOOK_UP] && p->move_buffer[LOOK_DOWN]) {
+        look_horizontal(p);
+    } else if (p->move_buffer[LOOK_UP]) {
+        look_up(p);
+    } else if (p->move_buffer[LOOK_DOWN]) {
+        look_down(p);
+    } else {
+        look_horizontal(p);
     }
 
     if (p->move_buffer[JUMP]) {
@@ -273,18 +330,44 @@ handle_player_input(Player *p)
 }
 
 void
+set_state(Player *p)
+{
+    if (on_ground(p)) {
+        if (p->physics.acc_x < 0.0f || p->physics.acc_x > 0.0f) {
+            p->state = WALKING;
+        } else {
+            p->state = IDLE;
+        }
+    } else {
+        if (p->physics.vel_y < 0.0f) {
+            p->state = JUMPING;
+        } else if (p->physics.vel_y > 0.0f) {
+            p->state = FALLING;
+        }
+    }
+}
+
+void
+change_sprite(Player *p)
+{
+    int dir_offset =  12, state_offset = 3;
+
+    int id = (p->dir * dir_offset) + (p->state * state_offset) + (p->looking);  
+
+    p->curr_sprite = &p->sprites[id];
+}
+
+void
 start_moving_left(Player *p)
 {
-    p->dir         = FACING_LEFT;
-    p->curr_sprite   = &p->sprites[WALK_LEFT];
+    p->dir           = LEFT;
     p->physics.acc_x = -1 * p->physics.max_acc_x;
 }
 
 void
 start_moving_right(Player *p)
 {
-    p->dir           = FACING_RIGHT;
-    p->curr_sprite   = &p->sprites[WALK_RIGHT];
+    p->dir           = RIGHT;
     p->physics.acc_x = p->physics.max_acc_x;
 }
 
@@ -292,18 +375,32 @@ void
 stop_moving(Player *p)
 {
     reset_animation(p);
-    if (p->dir == FACING_LEFT) {
-        p->curr_sprite = &p->sprites[IDLE_LEFT];
-    } else if (p->dir == FACING_RIGHT) {
-        p->curr_sprite = &p->sprites[IDLE_RIGHT];
-    }
     p->physics.acc_x = 0;
 }
 
 void
+look_up(Player *p)
+{
+    p->looking = UP;
+
+}
+
+void 
+look_down(Player *p)
+{
+    p->looking = DOWN;
+}
+void
+look_horizontal(Player *p)
+{
+    p->looking = HORIZONTAL;
+}
+
+
+void
 reset_animation(Player *p)
 {
-    p->curr_sprite->anim.elapsed_time = 0;
+    p->curr_sprite->anim.elapsed_time = p->curr_sprite->anim.frame_time;
 }
 
 void
@@ -376,7 +473,7 @@ update_player_pos(Player *p, uint64_t e_t)
         p->physics.vel_y = 0;
     }
 
-    //printf("Vel: %f, Acc: %d\n", p->physics.vel_y, p->physics.jump_time);
+    //printf("Vel: %f, Acc: \n", p->physics.vel_x);
 }
 
 void
