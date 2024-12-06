@@ -12,6 +12,7 @@ TO_DO
 * Create easy access buffer to select player sprites
 * Add sprite switching based on direction
 * Add jump mechanics
-; Add jumping sprites + switching, and setting player state
-; Add new player sprite loader system
-; Add looking up, down, or horizontal + switching
+* Add jumping sprites + switching, and setting player state
+* Add new player sprite loader system
+* Add looking up, down, horizontal and backwards + switching
+; Add basic test_tilemap functionality

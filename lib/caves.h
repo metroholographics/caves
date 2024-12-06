@@ -10,6 +10,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define G_WIDTH   320
+#define G_HEIGHT  240
+#define SCALING   2
+#define W_WIDTH   G_WIDTH * SCALING
+#define W_HEIGHT  G_HEIGHT * SCALING
+#define TILE_SIZE 16
+#define MAP_ROWS  (int) (G_HEIGHT / TILE_SIZE)
+#define MAP_COLS  (int) (G_WIDTH / TILE_SIZE)
+
 typedef struct {
 	char         *name;
 	SDL_Window   *window;
@@ -116,6 +125,17 @@ typedef struct {
 	Physics    physics;
 } Player;
 
+typedef enum {
+	NO_TILE=0,
+	WALL,
+	NUM_MAP_SPRITES,
+} Map_Sprites;
+
+typedef struct {
+	/*at 320x240, 16x16 tiles, the map is 20x15 tiles*/
+	int    tile_id[MAP_ROWS][MAP_COLS];
+} Map;
+
 /*main functions*/
 Game*			init_game_struct(char* name, int w, int h);
 void			set_game_resolution(Game *g, int r_w, int r_h, SDL_RendererLogicalPresentation lp);
@@ -148,7 +168,12 @@ void			update_jump(Player *p, uint64_t e_t);
 void			tick_animation(Player *p, uint64_t e_t);
 void			free_player_struct(Player *p);
 
-
+/*map functions*/
+Sprite*			init_map_sprites(void);
+Sprite			load_map_sprite(int id);
+Map*			gen_test_map(void);
+void			draw_map(Game* g, Sprite* m_s, Map* m);
+void			free_map(Sprite* s_a, Map* m);
 
 
 #endif

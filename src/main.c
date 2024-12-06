@@ -1,10 +1,6 @@
 #include "caves.h"
 
-#define G_WIDTH   320
-#define G_HEIGHT  240
-#define W_WIDTH   G_WIDTH * 2
-#define W_HEIGHT  G_HEIGHT * 2
-#define TILE_SIZE 16
+
 
 int
 main(int argc, char *argv[])
@@ -13,6 +9,9 @@ main(int argc, char *argv[])
 
     Game   *game;
     Player *player;
+    Map    *test_map;
+    Sprite *map_sprites;
+
     uint64_t last_update_ms;
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -45,6 +44,9 @@ main(int argc, char *argv[])
     SDL_SetTextureScaleMode(game->spritesheet, SDL_SCALEMODE_NEAREST);
 
     player = load_player_struct();
+    map_sprites = init_map_sprites();
+
+    test_map = gen_test_map();
 
     last_update_ms = SDL_GetTicks();
 
@@ -88,7 +90,7 @@ main(int argc, char *argv[])
         tick_animation(player, elapsed_time_ms);
 
         last_update_ms = current_time_ms;
-
+        
         dest = (SDL_FRect) {
             .x = round(player->pos.x),
             .y = round(player->pos.y),
@@ -102,11 +104,14 @@ main(int argc, char *argv[])
             &dest
         );
 
+        draw_map(game, map_sprites, test_map);
+
         SDL_RenderPresent(game->renderer);
 
         force_fps(50, start_ms);
     }
 
+    free_map(map_sprites, test_map);
     free_player_struct(player);
     free_game_struct(game);
     IMG_Quit();
@@ -114,6 +119,7 @@ main(int argc, char *argv[])
     return 0;
 }
 
+/*main functions*/
 Game*
 init_game_struct(char* name, int w, int h)
 {
@@ -155,6 +161,40 @@ load_spritesheet_png(Game *g, char *filepath)
     return s;
 }
 
+void
+free_game_struct(Game *g)
+{
+    if (g->window != NULL) {
+        printf("...freeing Window\n");
+        SDL_DestroyWindow(g->window);
+    }
+    if (g->renderer != NULL) {
+        printf("...freeing Renderer\n");
+        SDL_DestroyRenderer(g->renderer);
+    }
+    if (g->spritesheet != NULL) {
+        printf("...freeing spritesheet Texture\n");
+        SDL_DestroyTexture(g->spritesheet);
+    }
+    if (g != NULL) {
+        printf("...freeing Game struct\n");
+        free(g);
+    }
+}
+
+void
+force_fps(uint8_t fps, uint64_t start_ms)
+{
+    uint64_t elapsed_ms = SDL_GetTicks() - start_ms;
+        if (elapsed_ms < 1000 / fps) {
+            SDL_Delay(1000 / fps - elapsed_ms);
+        }
+    // float spf = (SDL_GetTicks() - start_ms) / 1000.0;
+    // float f = 1 / spf;
+    // printf("FPS: %f\n", f);
+}
+
+/*player functions*/
 Player*
 load_player_struct(void)
 {
@@ -170,8 +210,8 @@ load_player_struct(void)
     p->dir       = LEFT;
     p->looking   = HORIZONTAL;
     p->curr_sprite = &p->sprites[L_IDLE_H];
-    p->pos.x       = G_WIDTH  / 2;
-    p->pos.y       = G_HEIGHT / 2;
+    p->pos.x       = (MAP_COLS / 2) * TILE_SIZE /*G_WIDTH  / 2*/;
+    p->pos.y       = (MAP_ROWS / 2) * TILE_SIZE /*G_HEIGHT / 2*/;
     p->physics     = (Physics) {
                 .acc_x       = 0.0f,
                 .max_acc_x   = 0.000625,
@@ -251,7 +291,6 @@ load_player_sprite(int dir, int state, int looking)
     }
 
     return s;
-
 }
 
 void
@@ -382,7 +421,6 @@ void
 look_up(Player *p)
 {
     p->looking = UP;
-
 }
 
 void 
@@ -390,17 +428,17 @@ look_down(Player *p)
 {
     p->looking = DOWN;
 }
+
 void
 look_horizontal(Player *p)
 {
     p->looking = HORIZONTAL;
 }
 
-
 void
 reset_animation(Player *p)
 {
-    p->curr_sprite->anim.elapsed_time = p->curr_sprite->anim.frame_time;
+    p->curr_sprite->anim.elapsed_time = 0;
 }
 
 void
@@ -419,7 +457,7 @@ start_jump(Player *p)
 bool
 on_ground(Player *p)
 {
-    return (p->pos.y == G_HEIGHT / 2);
+    return (p->pos.y == (MAP_ROWS / 2) * TILE_SIZE);
 }
 
 void
@@ -468,8 +506,8 @@ update_player_pos(Player *p, uint64_t e_t)
                             p->physics.max_speed_y);
     }
 
-    if (p->pos.y > G_HEIGHT / 2) {
-        p->pos.y = G_HEIGHT / 2;
+    if (p->pos.y > MAP_ROWS / 2 * TILE_SIZE) {
+        p->pos.y = MAP_ROWS / 2 * TILE_SIZE;
         p->physics.vel_y = 0;
     }
 
@@ -503,20 +541,6 @@ tick_animation(Player *p, uint64_t e_t)
             p->curr_sprite->anim.curr_frame = 0;
         }
     }
-
-}
-
-void
-force_fps(uint8_t fps, uint64_t start_ms)
-{
-    uint64_t elapsed_ms = SDL_GetTicks() - start_ms;
-
-        if (elapsed_ms < 1000 / fps) {
-            SDL_Delay(1000 / fps - elapsed_ms);
-        }
-    // float spf = (SDL_GetTicks() - start_ms) / 1000.0;
-    // float f = 1 / spf;
-    // printf("FPS: %f\n", f);
 }
 
 void
@@ -528,23 +552,94 @@ free_player_struct(Player *p)
     }
 }
 
-void
-free_game_struct(Game *g)
+/*map functions*/
+Sprite*
+init_map_sprites(void)
 {
-    if (g->window != NULL) {
-        printf("...freeing Window\n");
-        SDL_DestroyWindow(g->window);
+    Sprite* s_a = malloc(sizeof(Sprite) * NUM_MAP_SPRITES);
+    if (s_a == NULL) return NULL;
+
+    s_a[NO_TILE] = load_map_sprite(NO_TILE);
+    s_a[WALL]    = load_map_sprite(WALL);
+
+    return s_a;
+}
+
+Sprite
+load_map_sprite(int id)
+{
+    Sprite s = (Sprite) {
+        .source = (SDL_FRect) {.w = TILE_SIZE, .h = TILE_SIZE},
+    };
+
+    switch (id) {
+        case NO_TILE:
+            break;
+        case WALL:
+            s.source.x = 0;
+            s.source.y = 2 * TILE_SIZE;
+            break;
+        default:
+            break;   
     }
-    if (g->renderer != NULL) {
-        printf("...freeing Renderer\n");
-        SDL_DestroyRenderer(g->renderer);
+    return s;
+}
+
+Map*
+gen_test_map(void)
+{
+    int rows, cols;
+    Map* m = malloc(sizeof(Map));
+    if (m == NULL) return NULL;
+
+    for (rows = 0; rows < MAP_ROWS; rows++) {
+        for (cols = 0; cols < MAP_COLS; cols++) {
+            m->tile_id[rows][cols] = 0;
+        }
     }
-    if (g->spritesheet != NULL) {
-        printf("...freeing spritesheet Texture\n");
-        SDL_DestroyTexture(g->spritesheet);
+
+    rows = (MAP_ROWS / 2) + 1;
+
+    for (cols = 0; cols < MAP_COLS; cols++) {
+        m->tile_id[rows][cols] = WALL;
     }
-    if (g != NULL) {
-        printf("...freeing Game struct\n");
-        free(g);
+
+    m->tile_id[7][7] = WALL;
+    m->tile_id[6][6] = NO_TILE;
+    m->tile_id[5][5] = WALL;
+
+    return m;
+}
+
+void
+draw_map(Game* g, Sprite* m_s, Map* m)
+{
+    SDL_FRect dest = (SDL_FRect) {.w = 16.0, .h = 16.0};
+    int rows, cols;
+    for (rows = 0; rows < MAP_ROWS; rows++) {
+        for (cols = 0; cols < MAP_COLS; cols++) {
+            if (m->tile_id[rows][cols] != NO_TILE) {
+                Sprite to_draw = m_s[m->tile_id[rows][cols]];
+                dest.x = cols * TILE_SIZE;
+                dest.y = rows * TILE_SIZE;
+                SDL_RenderTexture(g->renderer,
+                    g->spritesheet,
+                    &to_draw.source,
+                    &dest);
+            }
+        }
+    }
+}
+
+void
+free_map(Sprite* s_a, Map* m)
+{
+    if (s_a != NULL) {
+        printf("...freeing Map Sprites\n");
+        free(s_a);
+    }
+    if (m != NULL) {
+        printf("...freeing Map\n");
+        free(m);
     }
 }
