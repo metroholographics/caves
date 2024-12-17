@@ -55,7 +55,6 @@ main(int argc, char *argv[])
                  current_time_ms,
                  elapsed_time_ms;
         SDL_Event event;
-        SDL_FRect dest;
         
         SDL_SetRenderDrawColor(game->renderer, 5, 5, 5, 255);
         SDL_RenderClear(game->renderer);
@@ -83,26 +82,11 @@ main(int argc, char *argv[])
         current_time_ms = SDL_GetTicks();
         elapsed_time_ms = current_time_ms - last_update_ms;
 
-        handle_player_input(player);
-        update_player_pos(player, elapsed_time_ms);
-        set_state(player);
-        change_sprite(player);
-        tick_animation(player, elapsed_time_ms);
+        player_update(player, elapsed_time_ms, test_map);
 
         last_update_ms = current_time_ms;
         
-        dest = (SDL_FRect) {
-            .x = round(player->pos.x),
-            .y = round(player->pos.y),
-            .w = 16.0,
-            .h = 16.0
-        };
-
-        SDL_RenderTexture(game->renderer,
-            game->spritesheet,
-            &player->curr_sprite->source,
-            &dest
-        );
+        draw_player(game, player);
 
         draw_map(game, map_sprites, test_map);
 
@@ -211,8 +195,9 @@ load_player_struct(void)
     p->looking   = HORIZONTAL;
     p->curr_sprite = &p->sprites[L_IDLE_H];
     p->pos.x       = (MAP_COLS / 2) * TILE_SIZE /*G_WIDTH  / 2*/;
-    p->pos.y       = (MAP_ROWS / 2) * TILE_SIZE /*G_HEIGHT / 2*/;
+    p->pos.y       = 0 /*G_HEIGHT / 2*/;
     p->physics     = (Physics) {
+                .on_ground   = false,
                 .acc_x       = 0.0f,
                 .max_acc_x   = 0.000625,
                 .max_speed_x = 0.1625f,
@@ -225,6 +210,8 @@ load_player_struct(void)
                 .max_jump    = 275,
                 .jump_active = false,
                 .gravity     = 0.000625f,
+                .collisionX  = (SDL_FRect) {.x = 3, .y = 5, .w = 10, .h = 6},
+                .collisionY  = (SDL_FRect) {.x = 5, .y = 1, .w = 6, .h = 15},
             };
 
     for (i = 0; i < NUM_MOVES; i++) {
@@ -337,6 +324,18 @@ read_player_input(Player *p, SDL_Event e, SDL_EventType t)
 }
 
 void
+player_update(Player *p, uint64_t e_t, Map *m)
+{
+    handle_player_input(p);
+    update_player_pos(p, e_t, m);
+    set_state(p);
+    change_sprite(p);
+    tick_animation(p, e_t);
+
+    return;
+}
+
+void
 handle_player_input(Player *p)
 {
     if (p->move_buffer[M_LEFT] && p->move_buffer[M_RIGHT]) {
@@ -371,7 +370,7 @@ handle_player_input(Player *p)
 void
 set_state(Player *p)
 {
-    if (on_ground(p)) {
+    if (p->physics.on_ground) {
         if (p->physics.acc_x < 0.0f || p->physics.acc_x > 0.0f) {
             p->state = WALKING;
         } else {
@@ -444,7 +443,7 @@ reset_animation(Player *p)
 void
 start_jump(Player *p)
 {
-    if (on_ground(p)) {
+    if (p->physics.on_ground) {
         reset_jump(p);
         p->physics.vel_y = (-1 * p->physics.jump_speed);
     } else if (p->physics.vel_y < 0.0f) {
@@ -452,12 +451,6 @@ start_jump(Player *p)
     } else {
         stop_jump(p);
     }
-}
-
-bool
-on_ground(Player *p)
-{
-    return (p->pos.y == (MAP_ROWS / 2) * TILE_SIZE);
 }
 
 void
@@ -470,6 +463,7 @@ reset_jump(Player *p)
 void
 reactivate_jump(Player *p)
 {
+    p->physics.on_ground = false;
     if (p->physics.jump_time > 0) {
         p->physics.jump_active = true;
     } else {
@@ -484,34 +478,66 @@ stop_jump(Player *p)
 }
 
 void
-update_player_pos(Player *p, uint64_t e_t)
+update_player_pos(Player *p, uint64_t e_t, Map* m)
 {
-    p->pos.x         += p->physics.vel_x * e_t;
+    update_player_X(p, e_t, m);
+    update_jump(p, e_t);
+    update_player_Y(p, e_t, m);
+}
+
+void
+update_player_X(Player *p, uint64_t e_t, Map* m)
+{
+    SDL_FRect r;
+    Collision_Info info;
+
     p->physics.vel_x += p->physics.acc_x * e_t;
 
     if (p->physics.acc_x < 0.0f) {
         p->physics.vel_x = fmaxf(p->physics.vel_x, (-1 * p->physics.max_speed_x));
     } else if (p->physics.acc_x > 0.0f) {
         p->physics.vel_x = fminf(p->physics.vel_x, p->physics.max_speed_x);
-    } else if (on_ground(p)){
+    } else if (p->physics.on_ground){
         p->physics.vel_x *= p->physics.slowdown_x;
     }
 
-    update_jump(p, e_t);
+    int delta = p->physics.vel_x * e_t;
 
-    p->pos.y += p->physics.vel_y * e_t;
+    if (delta > 0) {
+        r = right_collision(p, delta);
+        info = get_wall_collision_coords(m, r);
 
-    if (!p->physics.jump_active) {
-        p->physics.vel_y = fminf(p->physics.vel_y + p->physics.gravity * e_t,
-                            p->physics.max_speed_y);
+        if (info.collided) {
+            p->pos.x = info.col * TILE_SIZE - rect_right(p->physics.collisionX);
+            p->physics.vel_x = 0.0f;
+        } else {
+            p->pos.x += delta;
+        }
+
+        r = left_collision(p, 0);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.x = info.col * TILE_SIZE + rect_right(p->physics.collisionX);
+        }
+    } else {
+        r = left_collision(p, delta);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.x = info.col * TILE_SIZE + rect_right(p->physics.collisionX);
+            p->physics.vel_x = 0.0f;
+        } else {
+            p->pos.x += delta;
+        }
+
+        r = right_collision(p, 0);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.x = info.col * TILE_SIZE - rect_right(p->physics.collisionX);
+        }        
     }
-
-    if (p->pos.y > MAP_ROWS / 2 * TILE_SIZE) {
-        p->pos.y = MAP_ROWS / 2 * TILE_SIZE;
-        p->physics.vel_y = 0;
-    }
-
-    //printf("Vel: %f, Acc: \n", p->physics.vel_x);
 }
 
 void
@@ -523,6 +549,115 @@ update_jump(Player *p, uint64_t e_t)
             p->physics.jump_active = false;
         }
     }
+}
+
+void
+update_player_Y(Player *p, uint64_t e_t, Map* m)
+{
+    SDL_FRect r;
+    Collision_Info info;
+
+    if (!p->physics.jump_active) {
+        p->physics.vel_y = fminf(p->physics.vel_y + p->physics.gravity * e_t,
+                            p->physics.max_speed_y);
+    }
+
+    int delta = p->physics.vel_y * e_t;
+
+    if (delta > 0) {
+        r = bot_collision(p, delta);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.y = info.row * TILE_SIZE - rect_bot(p->physics.collisionY);
+            p->physics.vel_y = 0.0f;
+            p->physics.on_ground = true;
+        } else {
+            p->pos.y += delta;
+            p->physics.on_ground = false;
+        }
+
+        r = top_collision(p, 0);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.y = info.row * TILE_SIZE + p->physics.collisionY.h;
+        }
+    } else {
+        r = top_collision(p, delta);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.y = info.row * TILE_SIZE + p->physics.collisionY.h;
+            p->physics.vel_y = 0.0f;
+        } else {
+            p->pos.y += delta;
+            p->physics.on_ground = false;
+        }
+
+        r = bot_collision(p, 0);
+        info = get_wall_collision_coords(m, r);
+
+        if (info.collided) {
+            p->pos.y = info.row * TILE_SIZE - rect_bot(p->physics.collisionY);
+            p->physics.on_ground = true;
+        }
+    } 
+}
+
+SDL_FRect
+left_collision(Player *p, int delta)
+{
+    SDL_FRect col_x = p->physics.collisionX;
+    SDL_FRect r = (SDL_FRect) {
+        .x = p->pos.x + rect_left(col_x) + delta,
+        .y = p->pos.y + rect_top(col_x),
+        .w = col_x.w / 2 - delta,
+        .h = col_x.h,
+    };
+    return r;
+}
+
+SDL_FRect
+right_collision(Player *p, int delta)
+{
+    SDL_FRect col_x = p->physics.collisionX;
+    SDL_FRect r = (SDL_FRect) {
+        .x = p->pos.x + rect_left(col_x) + col_x.w / 2 ,
+        .y = p->pos.y + rect_top(col_x),
+        .w = col_x.w / 2 + delta,
+        .h = col_x.h,
+    };
+
+    return r;
+}
+
+SDL_FRect
+top_collision(Player *p, int delta)
+{
+    SDL_FRect col_y = p->physics.collisionY;
+    SDL_FRect r = (SDL_FRect) {
+        .x = p->pos.x + rect_left(col_y),
+        .y = p->pos.y + rect_top(col_y) + delta,
+        .w = col_y.w,
+        .h = col_y.h / 2 - delta,
+    };
+
+    return r;
+}
+
+SDL_FRect
+bot_collision(Player *p, int delta)
+{
+    SDL_FRect col_y = p->physics.collisionY;
+    SDL_FRect r = (SDL_FRect) {
+        .x = p->pos.x + rect_left(col_y),
+        .y = p->pos.y + rect_top(col_y) + col_y.h / 2,
+        .w = col_y.w,
+        .h = col_y.h / 2 + delta,
+    };
+
+    return r;
 }
 
 void
@@ -541,6 +676,40 @@ tick_animation(Player *p, uint64_t e_t)
             p->curr_sprite->anim.curr_frame = 0;
         }
     }
+}
+
+void
+draw_player(Game *g, Player *p)
+{
+    SDL_FRect dest = (SDL_FRect) {
+        .x = round(p->pos.x),
+        .y = round(p->pos.y),
+        .w = 16.0,
+        .h = 16.0
+    };
+
+    //DEBUG: - DELETE WHEN COLLISIONS WORKING
+
+    // int tile_x, tile_y;
+    // tile_x = (int) p->pos.x / TILE_SIZE;
+    // tile_y = (int) p->pos.y / TILE_SIZE;
+
+    // int top = (int) dest.y / TILE_SIZE;
+    // int bot = (int) (dest.y + dest.h) / TILE_SIZE;
+    // int left = (int) dest.x / TILE_SIZE;
+    // int right = (int) (dest.x + dest.w) / TILE_SIZE;
+
+
+    // printf("TILE_X: %d, TILE_Y: %d --> ", tile_x, tile_y);
+    // printf("TOP: %d, BOT: %d, LEFT: %d, RIGHT: %d\n", top, bot, left, right);
+
+    SDL_RenderTexture(g->renderer,
+        g->spritesheet,
+        &p->curr_sprite->source,
+        &dest
+    );
+
+    return;
 }
 
 void
@@ -605,8 +774,9 @@ gen_test_map(void)
     }
 
     m->tile_id[7][7] = WALL;
-    m->tile_id[6][6] = NO_TILE;
+    m->tile_id[6][6] = WALL;
     m->tile_id[5][5] = WALL;
+    m->tile_id[5][7] = WALL;
 
     return m;
 }
@@ -629,6 +799,51 @@ draw_map(Game* g, Sprite* m_s, Map* m)
             }
         }
     }
+}
+
+int
+rect_top(SDL_FRect r)
+{
+    return (int) r.y;
+}
+
+int
+rect_bot(SDL_FRect r)
+{
+    return (int) (r.y + r.h);
+}
+
+int
+rect_left(SDL_FRect r)
+{
+    return (int) (r.x);
+}
+
+int
+rect_right(SDL_FRect r)
+{
+    return (int) (r.x + r.w);
+}
+
+Colliding_Tiles
+get_colliding_tiles(Colliding_Tiles *c, SDL_FRect r)
+{
+    int row, col, index;
+    int top   = (int) (rect_top(r)   / TILE_SIZE);
+    int bot   = (int) (rect_bot(r)   / TILE_SIZE);
+    int left  = (int) (rect_left(r)  / TILE_SIZE);
+    int right = (int) (rect_right(r) / TILE_SIZE);
+
+    index = 0;
+    for (row = top; row <= bot; row++) {
+        for (col = left; col <= right; col++) {
+            c->col_tiles[index] = (SDL_Point) {.x = col, .y = row};
+            index++;
+        }
+    }
+    c->index = index;
+
+    return *c;
 }
 
 void

@@ -37,6 +37,7 @@ typedef struct {
 } Animation;
 
 typedef struct {
+	bool  on_ground;
 	float acc_x;
 	float max_acc_x;
 	float max_speed_x;
@@ -49,6 +50,8 @@ typedef struct {
 	int   max_jump;
 	bool  jump_active;
 	float gravity;
+	SDL_FRect collisionX;
+	SDL_FRect collisionY;
 } Physics;
 
 typedef enum {
@@ -136,6 +139,17 @@ typedef struct {
 	int    tile_id[MAP_ROWS][MAP_COLS];
 } Map;
 
+typedef struct {
+	int index;
+	SDL_Point col_tiles[10];
+} Colliding_Tiles;
+
+typedef struct {
+	bool collided;
+	int row;
+	int col;
+} Collision_Info;
+
 /*main functions*/
 Game*			init_game_struct(char* name, int w, int h);
 void			set_game_resolution(Game *g, int r_w, int r_h, SDL_RendererLogicalPresentation lp);
@@ -148,6 +162,7 @@ Player*			load_player_struct(void);
 void			init_player_sprites(Player *p);
 Sprite			load_player_sprite(int dir, int state, int looking);
 void			read_player_input(Player *p, SDL_Event e, SDL_EventType t);
+void			player_update(Player *p, uint64_t e_t, Map *m);
 void			handle_player_input(Player *p);
 void			set_state(Player *p);
 void			change_sprite(Player *p);
@@ -159,14 +174,21 @@ void			look_down(Player *p);
 void			look_horizontal(Player *p);
 void			reset_animation(Player *p);
 void			start_jump(Player *p);
-bool			on_ground(Player *p);
 void			reset_jump(Player *p);
 void			reactivate_jump(Player *p);
 void			stop_jump(Player *p);
-void			update_player_pos(Player *p, uint64_t e_t);
+void			update_player_pos(Player *p, uint64_t e_t, Map *m);
+void			update_player_X(Player *p, uint64_t e_t, Map *m);
+void			update_player_Y(Player *p, uint64_t e_t, Map *m);
 void			update_jump(Player *p, uint64_t e_t);
 void			tick_animation(Player *p, uint64_t e_t);
+void			draw_player(Game *g, Player *p);
 void			free_player_struct(Player *p);
+SDL_FRect		left_collision(Player *p, int delta);
+SDL_FRect		right_collision(Player *p, int delta);
+SDL_FRect		top_collision(Player *p, int delta);
+SDL_FRect		bot_collision(Player *p, int delta);
+
 
 /*map functions*/
 Sprite*			init_map_sprites(void);
@@ -174,6 +196,29 @@ Sprite			load_map_sprite(int id);
 Map*			gen_test_map(void);
 void			draw_map(Game* g, Sprite* m_s, Map* m);
 void			free_map(Sprite* s_a, Map* m);
+int				rect_top(SDL_FRect r);
+int				rect_bot(SDL_FRect r);
+int				rect_left(SDL_FRect r);
+int				rect_right(SDL_FRect r);
+Collision_Info  get_wall_collision_coords(Map *m, SDL_FRect r);
+Colliding_Tiles	get_colliding_tiles(Colliding_Tiles *c, SDL_FRect r);
 
+Collision_Info
+get_wall_collision_coords(Map *m, SDL_FRect r)
+{
+	Collision_Info info = (Collision_Info) {false, 0, 0};
+	Colliding_Tiles c = get_colliding_tiles(&c, r);
+	int i, x, y;
+
+	for (i = 0; i < c.index; i++) {
+		y = c.col_tiles[i].y;
+		x = c.col_tiles[i].x;
+		if (m->tile_id[y][x] == WALL) {
+			info = (Collision_Info) {true, y, x};
+			return info;
+		}
+	}
+	return info;
+}
 
 #endif

@@ -15,4 +15,8 @@ TO_DO
 * Add jumping sprites + switching, and setting player state
 * Add new player sprite loader system
 * Add looking up, down, horizontal and backwards + switching
-; Add basic test_tilemap functionality
+* Add basic test_tilemap functionality
+; Seperate player and map update and draw functions
+; Add tile collision
+- Understand tile collision code
+- ???
