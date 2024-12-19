@@ -16,7 +16,11 @@ TO_DO
 * Add new player sprite loader system
 * Add looking up, down, horizontal and backwards + switching
 * Add basic test_tilemap functionality
-; Seperate player and map update and draw functions
-; Add tile collision
-- Understand tile collision code
-- ???
+* Seperate player and map update and draw functions
+* Add tile collision
+* Understand tile collision code
+* Refine player movement
+* Add player interacting state
+- Fix jumping while looking down - shouldn't interact when hits the ground
+- Figure out why game crashes when another app clicked
+- 

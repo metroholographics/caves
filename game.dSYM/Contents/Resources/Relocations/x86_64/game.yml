@@ -1,0 +1,50 @@
+---
+triple:          'x86_64-apple-darwin'
+binary-path:     game
+relocations:
+  - { offset: 0x26, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100001360, symSize: 0x460 }
+  - { offset: 0xDE7, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100001360, symSize: 0x460 }
+  - { offset: 0xEB4, size: 0x8, addend: 0x0, symName: _init_game_struct, symObjAddr: 0x460, symBinAddr: 0x1000017C0, symSize: 0xA0 }
+  - { offset: 0xF06, size: 0x8, addend: 0x0, symName: _set_game_resolution, symObjAddr: 0x500, symBinAddr: 0x100001860, symSize: 0x40 }
+  - { offset: 0xF54, size: 0x8, addend: 0x0, symName: _load_spritesheet_png, symObjAddr: 0x540, symBinAddr: 0x1000018A0, symSize: 0x60 }
+  - { offset: 0xF98, size: 0x8, addend: 0x0, symName: _load_player_struct, symObjAddr: 0x5A0, symBinAddr: 0x100001900, symSize: 0x1E0 }
+  - { offset: 0xFCE, size: 0x8, addend: 0x0, symName: _init_map_sprites, symObjAddr: 0x780, symBinAddr: 0x100001AE0, symSize: 0xB0 }
+  - { offset: 0xFF8, size: 0x8, addend: 0x0, symName: _gen_test_map, symObjAddr: 0x830, symBinAddr: 0x100001B90, symSize: 0x120 }
+  - { offset: 0x1040, size: 0x8, addend: 0x0, symName: _read_player_input, symObjAddr: 0x950, symBinAddr: 0x100001CB0, symSize: 0x180 }
+  - { offset: 0x1084, size: 0x8, addend: 0x0, symName: _player_update, symObjAddr: 0xAD0, symBinAddr: 0x100001E30, symSize: 0x60 }
+  - { offset: 0x10C8, size: 0x8, addend: 0x0, symName: _draw_player, symObjAddr: 0xB30, symBinAddr: 0x100001E90, symSize: 0xD0 }
+  - { offset: 0x110C, size: 0x8, addend: 0x0, symName: _draw_map, symObjAddr: 0xC00, symBinAddr: 0x100001F60, symSize: 0x120 }
+  - { offset: 0x119B, size: 0x8, addend: 0x0, symName: _force_fps, symObjAddr: 0xD20, symBinAddr: 0x100002080, symSize: 0x70 }
+  - { offset: 0x11DB, size: 0x8, addend: 0x0, symName: _free_map, symObjAddr: 0xD90, symBinAddr: 0x1000020F0, symSize: 0x60 }
+  - { offset: 0x1210, size: 0x8, addend: 0x0, symName: _free_player_struct, symObjAddr: 0xDF0, symBinAddr: 0x100002150, symSize: 0x40 }
+  - { offset: 0x1236, size: 0x8, addend: 0x0, symName: _free_game_struct, symObjAddr: 0xE30, symBinAddr: 0x100002190, symSize: 0xC0 }
+  - { offset: 0x125A, size: 0x8, addend: 0x0, symName: _init_player_sprites, symObjAddr: 0xEF0, symBinAddr: 0x100002250, symSize: 0xE0 }
+  - { offset: 0x12E0, size: 0x8, addend: 0x0, symName: _load_player_sprite, symObjAddr: 0xFD0, symBinAddr: 0x100002330, symSize: 0x210 }
+  - { offset: 0x13BF, size: 0x8, addend: 0x0, symName: _handle_player_input, symObjAddr: 0x11E0, symBinAddr: 0x100002540, symSize: 0x140 }
+  - { offset: 0x13E5, size: 0x8, addend: 0x0, symName: _update_player_pos, symObjAddr: 0x1320, symBinAddr: 0x100002680, symSize: 0x40 }
+  - { offset: 0x1429, size: 0x8, addend: 0x0, symName: _set_state, symObjAddr: 0x1360, symBinAddr: 0x1000026C0, symSize: 0xB0 }
+  - { offset: 0x144F, size: 0x8, addend: 0x0, symName: _change_sprite, symObjAddr: 0x1410, symBinAddr: 0x100002770, symSize: 0x60 }
+  - { offset: 0x14A2, size: 0x8, addend: 0x0, symName: _tick_animation, symObjAddr: 0x1470, symBinAddr: 0x1000027D0, symSize: 0x110 }
+  - { offset: 0x14D7, size: 0x8, addend: 0x0, symName: _stop_moving, symObjAddr: 0x1580, symBinAddr: 0x1000028E0, symSize: 0x30 }
+  - { offset: 0x14FD, size: 0x8, addend: 0x0, symName: _start_moving_left, symObjAddr: 0x15B0, symBinAddr: 0x100002910, symSize: 0x30 }
+  - { offset: 0x1523, size: 0x8, addend: 0x0, symName: _start_moving_right, symObjAddr: 0x15E0, symBinAddr: 0x100002940, symSize: 0x30 }
+  - { offset: 0x1549, size: 0x8, addend: 0x0, symName: _look_horizontal, symObjAddr: 0x1610, symBinAddr: 0x100002970, symSize: 0x20 }
+  - { offset: 0x156F, size: 0x8, addend: 0x0, symName: _look_up, symObjAddr: 0x1630, symBinAddr: 0x100002990, symSize: 0x20 }
+  - { offset: 0x1595, size: 0x8, addend: 0x0, symName: _look_down, symObjAddr: 0x1650, symBinAddr: 0x1000029B0, symSize: 0x20 }
+  - { offset: 0x15BB, size: 0x8, addend: 0x0, symName: _start_jump, symObjAddr: 0x1670, symBinAddr: 0x1000029D0, symSize: 0x50 }
+  - { offset: 0x15E1, size: 0x8, addend: 0x0, symName: _stop_jump, symObjAddr: 0x16C0, symBinAddr: 0x100002A20, symSize: 0x20 }
+  - { offset: 0x1607, size: 0x8, addend: 0x0, symName: _reset_animation, symObjAddr: 0x16E0, symBinAddr: 0x100002A40, symSize: 0x20 }
+  - { offset: 0x162D, size: 0x8, addend: 0x0, symName: _update_player_X, symObjAddr: 0x1700, symBinAddr: 0x100002A60, symSize: 0x780 }
+  - { offset: 0x16AE, size: 0x8, addend: 0x0, symName: _update_player_Y, symObjAddr: 0x1E80, symBinAddr: 0x1000031E0, symSize: 0x4E0 }
+  - { offset: 0x172F, size: 0x8, addend: 0x0, symName: _right_collision, symObjAddr: 0x2360, symBinAddr: 0x1000036C0, symSize: 0xE0 }
+  - { offset: 0x1786, size: 0x8, addend: 0x0, symName: _get_wall_collision_coords, symObjAddr: 0x2440, symBinAddr: 0x1000037A0, symSize: 0x120 }
+  - { offset: 0x180E, size: 0x8, addend: 0x0, symName: _rect_right, symObjAddr: 0x2560, symBinAddr: 0x1000038C0, symSize: 0x20 }
+  - { offset: 0x1838, size: 0x8, addend: 0x0, symName: _left_collision, symObjAddr: 0x2580, symBinAddr: 0x1000038E0, symSize: 0xD0 }
+  - { offset: 0x188F, size: 0x8, addend: 0x0, symName: _bot_collision, symObjAddr: 0x2650, symBinAddr: 0x1000039B0, symSize: 0xD0 }
+  - { offset: 0x18E6, size: 0x8, addend: 0x0, symName: _rect_bot, symObjAddr: 0x2720, symBinAddr: 0x100003A80, symSize: 0x20 }
+  - { offset: 0x1910, size: 0x8, addend: 0x0, symName: _top_collision, symObjAddr: 0x2740, symBinAddr: 0x100003AA0, symSize: 0xD0 }
+  - { offset: 0x1967, size: 0x8, addend: 0x0, symName: _rect_left, symObjAddr: 0x2810, symBinAddr: 0x100003B70, symSize: 0x20 }
+  - { offset: 0x1991, size: 0x8, addend: 0x0, symName: _rect_top, symObjAddr: 0x2830, symBinAddr: 0x100003B90, symSize: 0x20 }
+  - { offset: 0x19BB, size: 0x8, addend: 0x0, symName: _load_map_sprite, symObjAddr: 0x2850, symBinAddr: 0x100003BB0, symSize: 0x80 }
+  - { offset: 0x19F5, size: 0x8, addend: 0x0, symName: _get_colliding_tiles, symObjAddr: 0x28D0, symBinAddr: 0x100003C30, symSize: 0x12C }
+...

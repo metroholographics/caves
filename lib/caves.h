@@ -37,18 +37,19 @@ typedef struct {
 } Animation;
 
 typedef struct {
+	bool  interacting;
 	bool  on_ground;
-	float acc_x;
-	float max_acc_x;
+	bool  jump_active;
+	int   acc_x;
+	float walking_acc;
 	float max_speed_x;
 	float vel_x;
-	float slowdown_x;
+	float friction;
 	float vel_y;
 	float max_speed_y;
 	float jump_speed;
-	int   jump_time;
-	int   max_jump;
-	bool  jump_active;
+	float air_acc;
+	float jump_gravity;
 	float gravity;
 	SDL_FRect collisionX;
 	SDL_FRect collisionY;
@@ -76,6 +77,9 @@ typedef enum {
 	L_FALL_H,
 	L_FALL_U,
 	L_FALL_D,
+	L_INT_U,
+	L_INT_H,
+	L_INT_D,
 	R_IDLE_H,
 	R_IDLE_U,
 	R_IDLE_D,
@@ -88,6 +92,9 @@ typedef enum {
 	R_FALL_H,
 	R_FALL_U,
 	R_FALL_D,
+	R_INT_U,
+	R_INT_H,
+	R_INT_D,
 	NUM_SPRITES
 } SpriteID;
 
@@ -101,6 +108,7 @@ typedef enum {
 	WALKING,
 	JUMPING,
 	FALLING,
+	INTERACTING,
 	NUM_STATES
 } P_State;
 
@@ -203,22 +211,6 @@ int				rect_right(SDL_FRect r);
 Collision_Info  get_wall_collision_coords(Map *m, SDL_FRect r);
 Colliding_Tiles	get_colliding_tiles(Colliding_Tiles *c, SDL_FRect r);
 
-Collision_Info
-get_wall_collision_coords(Map *m, SDL_FRect r)
-{
-	Collision_Info info = (Collision_Info) {false, 0, 0};
-	Colliding_Tiles c = get_colliding_tiles(&c, r);
-	int i, x, y;
 
-	for (i = 0; i < c.index; i++) {
-		y = c.col_tiles[i].y;
-		x = c.col_tiles[i].x;
-		if (m->tile_id[y][x] == WALL) {
-			info = (Collision_Info) {true, y, x};
-			return info;
-		}
-	}
-	return info;
-}
 
 #endif

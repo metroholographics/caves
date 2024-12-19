@@ -8,8 +8,14 @@ TARGET = game # <---- CHANGE
 
 all: default
 
-default:
+default: 
 	$(CC) $(IFLAGS) $(LFLAGS) $(CFLAGS) $(SOURCES) -o $(TARGET)
 
 run: default
 	./$(TARGET)
+
+debug:
+	$(CC) $(IFLAGS) $(LFLAGS) $(CFLAGS) $(SOURCES) -g -o $(TARGET)
+
+clean:
+	rm -f $(TARGET)

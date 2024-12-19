@@ -197,21 +197,22 @@ load_player_struct(void)
     p->pos.x       = (MAP_COLS / 2) * TILE_SIZE /*G_WIDTH  / 2*/;
     p->pos.y       = 0 /*G_HEIGHT / 2*/;
     p->physics     = (Physics) {
-                .on_ground   = false,
-                .acc_x       = 0.0f,
-                .max_acc_x   = 0.000625,
-                .max_speed_x = 0.1625f,
-                .vel_x       = 0.0f,
-                .slowdown_x  = 0.8f,
-                .vel_y       = 0.0f,
-                .max_speed_y = 0.1625f,
-                .jump_speed  = 0.1625f,
-                .jump_time   = 0,
-                .max_jump    = 275,
-                .jump_active = false,
-                .gravity     = 0.000625f,
-                .collisionX  = (SDL_FRect) {.x = 3, .y = 5, .w = 10, .h = 6},
-                .collisionY  = (SDL_FRect) {.x = 5, .y = 1, .w = 6, .h = 15},
+                .interacting  = false,
+                .on_ground    = false,
+                .jump_active  = false,
+                .acc_x        = 0,
+                .walking_acc  = 0.00083007812,
+                .max_speed_x  = 0.15859375 / 2,
+                .vel_x        = 0.0,
+                .friction     = 0.00049804687,
+                .vel_y        = 0.0,
+                .max_speed_y  = 0.2998046875,
+                .jump_speed   = 0.25 / 2,
+                .air_acc      = 0.0003125,
+                .jump_gravity = 0.0003125 / 3,  
+                .gravity      = 0.00078125,
+                .collisionX   = (SDL_FRect) {.x = 3, .y = 5, .w = 10, .h = 6},
+                .collisionY   = (SDL_FRect) {.x = 5, .y = 1, .w = 6, .h = 15},
             };
 
     for (i = 0; i < NUM_MOVES; i++) {
@@ -263,7 +264,11 @@ load_player_sprite(int dir, int state, int looking)
             s.source.x += (looking * look_offset + jump_offset) * TILE_SIZE;
             break;
         case FALLING:
-            s.source.x += (looking * look_offset + fall_offset) * TILE_SIZE;   
+            s.source.x += (looking * look_offset + fall_offset) * TILE_SIZE;
+            break;
+        case INTERACTING:
+            s.source.x += back_frame * TILE_SIZE;
+            break;
     }
 
     if (looking == DOWN) {
@@ -274,7 +279,6 @@ load_player_sprite(int dir, int state, int looking)
         } else if (state == FALLING) {
             s.source.x = down_fall * TILE_SIZE;
         }
-
     }
 
     return s;
@@ -331,7 +335,6 @@ player_update(Player *p, uint64_t e_t, Map *m)
     set_state(p);
     change_sprite(p);
     tick_animation(p, e_t);
-
     return;
 }
 
@@ -370,8 +373,10 @@ handle_player_input(Player *p)
 void
 set_state(Player *p)
 {
-    if (p->physics.on_ground) {
-        if (p->physics.acc_x < 0.0f || p->physics.acc_x > 0.0f) {
+    if (p->physics.interacting) {
+        p->state = INTERACTING;
+    } else if (p->physics.on_ground) {
+        if (p->physics.acc_x < 0 || p->physics.acc_x > 0) {
             p->state = WALKING;
         } else {
             p->state = IDLE;
@@ -388,7 +393,7 @@ set_state(Player *p)
 void
 change_sprite(Player *p)
 {
-    int dir_offset =  12, state_offset = 3;
+    int dir_offset =  15, state_offset = 3;
 
     int id = (p->dir * dir_offset) + (p->state * state_offset) + (p->looking);  
 
@@ -398,15 +403,17 @@ change_sprite(Player *p)
 void
 start_moving_left(Player *p)
 {
-    p->dir           = LEFT;
-    p->physics.acc_x = -1 * p->physics.max_acc_x;
+    p->dir                 = LEFT;
+    p->physics.acc_x       = -1;
+    p->physics.interacting = false;
 }
 
 void
 start_moving_right(Player *p)
 {
-    p->dir           = RIGHT;
-    p->physics.acc_x = p->physics.max_acc_x;
+    p->dir                 = RIGHT;
+    p->physics.acc_x       = 1;
+    p->physics.interacting = false;
 }
 
 void
@@ -420,12 +427,17 @@ void
 look_up(Player *p)
 {
     p->looking = UP;
+    p->physics.interacting = false;
 }
 
 void 
 look_down(Player *p)
 {
+    if (p->looking == DOWN) return;
+
     p->looking = DOWN;
+    p->physics.interacting = p->physics.on_ground;        
+    
 }
 
 void
@@ -443,31 +455,10 @@ reset_animation(Player *p)
 void
 start_jump(Player *p)
 {
+    p->physics.interacting = false;
+    p->physics.jump_active = true;
     if (p->physics.on_ground) {
-        reset_jump(p);
         p->physics.vel_y = (-1 * p->physics.jump_speed);
-    } else if (p->physics.vel_y < 0.0f) {
-        reactivate_jump(p);
-    } else {
-        stop_jump(p);
-    }
-}
-
-void
-reset_jump(Player *p)
-{
-    p->physics.jump_time = p->physics.max_jump;
-    reactivate_jump(p);
-}
-
-void
-reactivate_jump(Player *p)
-{
-    p->physics.on_ground = false;
-    if (p->physics.jump_time > 0) {
-        p->physics.jump_active = true;
-    } else {
-        p->physics.jump_active = false;
     }
 }
 
@@ -481,7 +472,6 @@ void
 update_player_pos(Player *p, uint64_t e_t, Map* m)
 {
     update_player_X(p, e_t, m);
-    update_jump(p, e_t);
     update_player_Y(p, e_t, m);
 }
 
@@ -491,14 +481,22 @@ update_player_X(Player *p, uint64_t e_t, Map* m)
     SDL_FRect r;
     Collision_Info info;
 
-    p->physics.vel_x += p->physics.acc_x * e_t;
+    float x_accel = 0.0f;
+    if (p->physics.acc_x < 0) 
+        x_accel = p->physics.on_ground ? -1 * p->physics.walking_acc : -1 * p->physics.air_acc;
+    else if (p->physics.acc_x > 0) 
+        x_accel = p->physics.on_ground ? p->physics.walking_acc : p->physics.air_acc;
 
-    if (p->physics.acc_x < 0.0f) {
+    p->physics.vel_x += x_accel * e_t;
+
+    if (p->physics.acc_x < 0) {
         p->physics.vel_x = fmaxf(p->physics.vel_x, (-1 * p->physics.max_speed_x));
-    } else if (p->physics.acc_x > 0.0f) {
+    } else if (p->physics.acc_x > 0) {
         p->physics.vel_x = fminf(p->physics.vel_x, p->physics.max_speed_x);
-    } else if (p->physics.on_ground){
-        p->physics.vel_x *= p->physics.slowdown_x;
+    } else if (p->physics.on_ground) {
+        p->physics.vel_x = p->physics.vel_x > 0.0f ? 
+            fmaxf(0.0f, p->physics.vel_x - p->physics.friction * e_t) : 
+            fminf(0.0f, p->physics.vel_x + p->physics.friction * e_t);
     }
 
     int delta = p->physics.vel_x * e_t;
@@ -541,26 +539,15 @@ update_player_X(Player *p, uint64_t e_t, Map* m)
 }
 
 void
-update_jump(Player *p, uint64_t e_t)
-{
-    if (p->physics.jump_active) {
-        p->physics.jump_time -= e_t;
-        if (p->physics.jump_time <= 0) {
-            p->physics.jump_active = false;
-        }
-    }
-}
-
-void
 update_player_Y(Player *p, uint64_t e_t, Map* m)
 {
     SDL_FRect r;
     Collision_Info info;
 
-    if (!p->physics.jump_active) {
-        p->physics.vel_y = fminf(p->physics.vel_y + p->physics.gravity * e_t,
-                            p->physics.max_speed_y);
-    }
+    float gravity = p->physics.jump_active && p->physics.vel_y < 0.0f ? 
+            p->physics.jump_gravity : p->physics.gravity;
+
+    p->physics.vel_y = fminf(p->physics.vel_y + gravity * e_t, p->physics.max_speed_y);
 
     int delta = p->physics.vel_y * e_t;
 
@@ -824,6 +811,30 @@ rect_right(SDL_FRect r)
 {
     return (int) (r.x + r.w);
 }
+
+Collision_Info
+get_wall_collision_coords(Map *m, SDL_FRect r)
+{
+    Collision_Info info = (Collision_Info) {false, 0, 0};
+
+    if (!m) return info;
+
+    Colliding_Tiles c = {0};
+    get_colliding_tiles(&c, r);
+
+    int i, x, y;
+    for (i = 0; i < c.index; i++) {
+        y = c.col_tiles[i].y;
+        x = c.col_tiles[i].x;
+        if (m->tile_id[y][x] == WALL) {
+            info = (Collision_Info) {true, y, x};
+            return info;
+        }
+    }
+
+    return info;
+}
+
 
 Colliding_Tiles
 get_colliding_tiles(Colliding_Tiles *c, SDL_FRect r)
