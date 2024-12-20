@@ -19,6 +19,21 @@
 #define MAP_ROWS  (int) (G_HEIGHT / TILE_SIZE)
 #define MAP_COLS  (int) (G_WIDTH / TILE_SIZE)
 
+typedef enum {
+	K_LEFT=0,
+	K_RIGHT,
+	K_Z,
+	K_UP,
+	K_DOWN,
+	NUM_KEYS 
+} Keys;
+
+typedef struct {
+	bool pressed_keys[NUM_KEYS];
+	bool released_keys[NUM_KEYS];
+	bool held_keys[NUM_KEYS];
+} Move_Buffer;
+
 typedef struct {
 	char         *name;
 	SDL_Window   *window;
@@ -27,6 +42,7 @@ typedef struct {
 	bool         running;
 	int          width;
 	int          height;
+	Move_Buffer  m_buff;
 } Game;
 
 typedef struct {
@@ -54,15 +70,6 @@ typedef struct {
 	SDL_FRect collisionX;
 	SDL_FRect collisionY;
 } Physics;
-
-typedef enum {
-	M_LEFT = 0,
-	M_RIGHT,
-	JUMP,
-	LOOK_UP,
-	LOOK_DOWN,
-	NUM_MOVES
-} Moves;
 
 typedef enum {
 	L_IDLE_H=0,
@@ -129,7 +136,6 @@ typedef struct {
 	P_State    state;
 	P_Dir      dir;
 	P_Look     looking;
-	bool       move_buffer[NUM_MOVES];
 	Sprite     sprites[NUM_SPRITES];
 	Sprite*    curr_sprite;
 	SDL_FPoint pos;
@@ -158,20 +164,27 @@ typedef struct {
 	int col;
 } Collision_Info;
 
-/*main functions*/
+/*::main*/
 Game*			init_game_struct(char* name, int w, int h);
 void			set_game_resolution(Game *g, int r_w, int r_h, SDL_RendererLogicalPresentation lp);
 SDL_Texture*	load_spritesheet_png(Game *g, char* filepath);
+void 			begin_new_fame(Game* g);
+int 			keycode_to_keys(SDL_Keycode k);
+void 			key_down_event(Game* g, int key);
+void 			key_up_event(Game* g, int key);
+bool 			was_key_pressed(Game* g, int key);
+bool 			was_key_released(Game* g, int key);
+bool 			is_key_held(Game* g, int key);
+
 void			free_game_struct(Game *g);
 void			force_fps(uint8_t fps, uint64_t start_ms);
 
-/*player functions*/
+/*::player*/
 Player*			load_player_struct(void);
 void			init_player_sprites(Player *p);
 Sprite			load_player_sprite(int dir, int state, int looking);
-void			read_player_input(Player *p, SDL_Event e, SDL_EventType t);
-void			player_update(Player *p, uint64_t e_t, Map *m);
-void			handle_player_input(Player *p);
+void			player_update(Game* g, Player *p, uint64_t e_t, Map *m);
+void			handle_player_input(Game* g, Player *p);
 void			set_state(Player *p);
 void			change_sprite(Player *p);
 void			start_moving_left(Player *p);
@@ -182,34 +195,30 @@ void			look_down(Player *p);
 void			look_horizontal(Player *p);
 void			reset_animation(Player *p);
 void			start_jump(Player *p);
-void			reset_jump(Player *p);
-void			reactivate_jump(Player *p);
 void			stop_jump(Player *p);
 void			update_player_pos(Player *p, uint64_t e_t, Map *m);
 void			update_player_X(Player *p, uint64_t e_t, Map *m);
 void			update_player_Y(Player *p, uint64_t e_t, Map *m);
-void			update_jump(Player *p, uint64_t e_t);
-void			tick_animation(Player *p, uint64_t e_t);
-void			draw_player(Game *g, Player *p);
-void			free_player_struct(Player *p);
 SDL_FRect		left_collision(Player *p, int delta);
 SDL_FRect		right_collision(Player *p, int delta);
 SDL_FRect		top_collision(Player *p, int delta);
 SDL_FRect		bot_collision(Player *p, int delta);
+void			tick_animation(Player *p, uint64_t e_t);
+void			draw_player(Game *g, Player *p);
+void			free_player_struct(Player *p);
 
-
-/*map functions*/
+/*::map*/
 Sprite*			init_map_sprites(void);
 Sprite			load_map_sprite(int id);
 Map*			gen_test_map(void);
 void			draw_map(Game* g, Sprite* m_s, Map* m);
-void			free_map(Sprite* s_a, Map* m);
 int				rect_top(SDL_FRect r);
 int				rect_bot(SDL_FRect r);
 int				rect_left(SDL_FRect r);
 int				rect_right(SDL_FRect r);
 Collision_Info  get_wall_collision_coords(Map *m, SDL_FRect r);
 Colliding_Tiles	get_colliding_tiles(Colliding_Tiles *c, SDL_FRect r);
+void			free_map(Sprite* s_a, Map* m);
 
 
 

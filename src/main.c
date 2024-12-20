@@ -43,7 +43,7 @@ main(int argc, char *argv[])
 
     SDL_SetTextureScaleMode(game->spritesheet, SDL_SCALEMODE_NEAREST);
 
-    player = load_player_struct();
+    player      = load_player_struct();
     map_sprites = init_map_sprites();
 
     test_map = gen_test_map();
@@ -59,6 +59,8 @@ main(int argc, char *argv[])
         SDL_SetRenderDrawColor(game->renderer, 5, 5, 5, 255);
         SDL_RenderClear(game->renderer);
 
+        begin_new_fame(game);
+
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
                 case SDL_EVENT_QUIT:
@@ -68,11 +70,11 @@ main(int argc, char *argv[])
                     if (event.key.key == SDLK_ESCAPE) {
                         game->running = false;
                     } else {
-                        read_player_input(player, event, SDL_EVENT_KEY_DOWN);
+                        key_down_event(game, keycode_to_keys(event.key.key));
                     }
                     break;
                 case SDL_EVENT_KEY_UP:
-                    read_player_input(player, event, SDL_EVENT_KEY_UP);
+                    key_up_event(game, keycode_to_keys(event.key.key));
                     break;
                 default:
                     break;
@@ -82,12 +84,11 @@ main(int argc, char *argv[])
         current_time_ms = SDL_GetTicks();
         elapsed_time_ms = current_time_ms - last_update_ms;
 
-        player_update(player, elapsed_time_ms, test_map);
+        player_update(game, player, elapsed_time_ms, test_map);
 
         last_update_ms = current_time_ms;
         
         draw_player(game, player);
-
         draw_map(game, map_sprites, test_map);
 
         SDL_RenderPresent(game->renderer);
@@ -103,7 +104,7 @@ main(int argc, char *argv[])
     return 0;
 }
 
-/*main functions*/
+//::main
 Game*
 init_game_struct(char* name, int w, int h)
 {
@@ -119,6 +120,12 @@ init_game_struct(char* name, int w, int h)
     g->running     = false;
     g->width       = w;
     g->height      = h;
+
+    for (int i = 0; i < NUM_KEYS; i++) {
+        g->m_buff.pressed_keys[i] = false;
+        g->m_buff.held_keys[i] = false;
+        g->m_buff.released_keys[i] = false;
+    }
 
     return g;
 }
@@ -143,6 +150,55 @@ load_spritesheet_png(Game *g, char *filepath)
     s = IMG_LoadTexture(g->renderer, filepath);
 
     return s;
+}
+
+int keycode_to_keys(SDL_Keycode k) {
+    switch (k) {
+        case SDLK_LEFT:
+            return K_LEFT;
+        case SDLK_RIGHT:
+            return K_RIGHT;
+        case SDLK_Z:
+            return K_Z;
+        case SDLK_UP:
+            return K_UP;
+        case SDLK_DOWN:
+            return K_DOWN;
+        default:
+            return -1;
+    }
+}
+
+
+void begin_new_fame(Game* g) {
+    for (int i = 0; i < NUM_KEYS; i++) {
+        g->m_buff.pressed_keys[i] = false;
+        g->m_buff.released_keys[i] = false;
+    }
+}
+
+void key_down_event(Game* g, int key) {
+    if (key < 0) return;
+    g->m_buff.pressed_keys[key] = true;
+    g->m_buff.held_keys[key] = true;
+}
+
+void key_up_event(Game* g, int key) {
+    if (key < 0) return;
+    g->m_buff.released_keys[key] = true;
+    g->m_buff.held_keys[key] = false;
+}
+
+bool was_key_pressed(Game* g, int key) {
+    return g->m_buff.pressed_keys[key];
+}
+
+bool was_key_released(Game* g, int key) {
+    return g->m_buff.released_keys[key];
+}
+
+bool is_key_held(Game* g, int key) {
+    return g->m_buff.held_keys[key];
 }
 
 void
@@ -178,11 +234,10 @@ force_fps(uint8_t fps, uint64_t start_ms)
     // printf("FPS: %f\n", f);
 }
 
-/*player functions*/
+//::player
 Player*
 load_player_struct(void)
 {
-    int i;
     Player *p; 
 
     p = malloc(sizeof(Player));
@@ -190,12 +245,12 @@ load_player_struct(void)
 
     init_player_sprites(p);
 
-    p->state     = IDLE;
-    p->dir       = LEFT;
-    p->looking   = HORIZONTAL;
+    p->state       = IDLE;
+    p->dir         = LEFT;
+    p->looking     = HORIZONTAL;
     p->curr_sprite = &p->sprites[L_IDLE_H];
-    p->pos.x       = (MAP_COLS / 2) * TILE_SIZE /*G_WIDTH  / 2*/;
-    p->pos.y       = 0 /*G_HEIGHT / 2*/;
+    p->pos.x       = (MAP_COLS / 2) * TILE_SIZE;
+    p->pos.y       = 0;
     p->physics     = (Physics) {
                 .interacting  = false,
                 .on_ground    = false,
@@ -214,11 +269,6 @@ load_player_struct(void)
                 .collisionX   = (SDL_FRect) {.x = 3, .y = 5, .w = 10, .h = 6},
                 .collisionY   = (SDL_FRect) {.x = 5, .y = 1, .w = 6, .h = 15},
             };
-
-    for (i = 0; i < NUM_MOVES; i++) {
-        p->move_buffer[i] = false;
-    }
-
     return p;
 }
 
@@ -272,98 +322,55 @@ load_player_sprite(int dir, int state, int looking)
     }
 
     if (looking == DOWN) {
-        if (state == WALKING) {
+        if (state == WALKING || state == IDLE) {
             s.source.x = base_x;
-        } else if (state == IDLE) {
+        } else if (state == INTERACTING) {
             s.source.x = back_frame * TILE_SIZE;
         } else if (state == FALLING) {
             s.source.x = down_fall * TILE_SIZE;
-        }
+        } 
     }
 
     return s;
 }
 
 void
-read_player_input(Player *p, SDL_Event e, SDL_EventType t)
+player_update(Game* g, Player *p, uint64_t e_t, Map *m)
 {
-    if (t == SDL_EVENT_KEY_UP) {
-        switch (e.key.key) {
-            case SDLK_LEFT:
-                p->move_buffer[M_LEFT]  = false;
-                break;
-            case SDLK_RIGHT:
-                p->move_buffer[M_RIGHT] = false;
-                break;
-            case SDLK_Z:
-                p->move_buffer[JUMP] = false;
-                break;
-            case SDLK_UP:
-                p->move_buffer[LOOK_UP] = false;
-                break;
-            case SDLK_DOWN:
-                p->move_buffer[LOOK_DOWN] = false;
-                break;
-        }
-    } else if (t == SDL_EVENT_KEY_DOWN) {
-        switch (e.key.key) {
-            case SDLK_LEFT:
-                p->move_buffer[M_LEFT]  = true;
-                break;
-            case SDLK_RIGHT:
-                p->move_buffer[M_RIGHT] = true;
-                break;
-            case SDLK_Z:
-                p->move_buffer[JUMP] = true;
-                break;
-            case SDLK_UP:
-                p->move_buffer[LOOK_UP] = true;
-                break;
-            case SDLK_DOWN:
-                p->move_buffer[LOOK_DOWN] = true;
-                break;
-        }
-    }
-    //printf("MoveBuffer[L=%d][R=%d]\n", p->move_buffer[LEFT], p->move_buffer[RIGHT]);
-}
-
-void
-player_update(Player *p, uint64_t e_t, Map *m)
-{
-    handle_player_input(p);
-    update_player_pos(p, e_t, m);
     set_state(p);
     change_sprite(p);
+    handle_player_input(g, p);
+    update_player_pos(p, e_t, m);
     tick_animation(p, e_t);
     return;
 }
 
 void
-handle_player_input(Player *p)
+handle_player_input(Game* g, Player *p)
 {
-    if (p->move_buffer[M_LEFT] && p->move_buffer[M_RIGHT]) {
+    if (is_key_held(g, K_LEFT) && is_key_held(g, K_RIGHT)) {
         stop_moving(p);
-    } else if (p->move_buffer[M_LEFT]) {
-        start_moving_left(p);
-    } else if (p->move_buffer[M_RIGHT]) {
-        start_moving_right(p);
+    } else if (is_key_held(g, K_LEFT)) {
+         start_moving_left(p);
+    } else if (is_key_held(g, K_RIGHT)) {
+         start_moving_right(p);
     } else {
         stop_moving(p);
     }
 
-    if (p->move_buffer[LOOK_UP] && p->move_buffer[LOOK_DOWN]) {
+    if (is_key_held(g, K_UP) && is_key_held(g, K_DOWN)) {
         look_horizontal(p);
-    } else if (p->move_buffer[LOOK_UP]) {
+    } else if (is_key_held(g, K_UP)) {
         look_up(p);
-    } else if (p->move_buffer[LOOK_DOWN]) {
+    } else if (is_key_held(g, K_DOWN)) {
         look_down(p);
     } else {
         look_horizontal(p);
     }
 
-    if (p->move_buffer[JUMP]) {
+    if (was_key_pressed(g, K_Z)) {
         start_jump(p);
-    } else if (!p->move_buffer[JUMP]) {
+    } else if (was_key_released(g, K_Z)) {
         stop_jump(p);
     }
 
@@ -394,9 +401,7 @@ void
 change_sprite(Player *p)
 {
     int dir_offset =  15, state_offset = 3;
-
     int id = (p->dir * dir_offset) + (p->state * state_offset) + (p->looking);  
-
     p->curr_sprite = &p->sprites[id];
 }
 
@@ -433,11 +438,12 @@ look_up(Player *p)
 void 
 look_down(Player *p)
 {
-    if (p->looking == DOWN) return;
-
+    if (p->looking == DOWN) {
+        return;
+    }
     p->looking = DOWN;
-    p->physics.interacting = p->physics.on_ground;        
-    
+
+    p->physics.interacting = p->physics.on_ground;
 }
 
 void
@@ -675,21 +681,6 @@ draw_player(Game *g, Player *p)
         .h = 16.0
     };
 
-    //DEBUG: - DELETE WHEN COLLISIONS WORKING
-
-    // int tile_x, tile_y;
-    // tile_x = (int) p->pos.x / TILE_SIZE;
-    // tile_y = (int) p->pos.y / TILE_SIZE;
-
-    // int top = (int) dest.y / TILE_SIZE;
-    // int bot = (int) (dest.y + dest.h) / TILE_SIZE;
-    // int left = (int) dest.x / TILE_SIZE;
-    // int right = (int) (dest.x + dest.w) / TILE_SIZE;
-
-
-    // printf("TILE_X: %d, TILE_Y: %d --> ", tile_x, tile_y);
-    // printf("TOP: %d, BOT: %d, LEFT: %d, RIGHT: %d\n", top, bot, left, right);
-
     SDL_RenderTexture(g->renderer,
         g->spritesheet,
         &p->curr_sprite->source,
@@ -708,7 +699,7 @@ free_player_struct(Player *p)
     }
 }
 
-/*map functions*/
+//::map
 Sprite*
 init_map_sprites(void)
 {
@@ -834,7 +825,6 @@ get_wall_collision_coords(Map *m, SDL_FRect r)
 
     return info;
 }
-
 
 Colliding_Tiles
 get_colliding_tiles(Colliding_Tiles *c, SDL_FRect r)
